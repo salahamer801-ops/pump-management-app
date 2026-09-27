@@ -1,16 +1,21 @@
+# ما لا يدخل في سياق بناء الصورة:
+# - الاعتماديات المثبَّتة محليًا (تُثبَّت داخل الصورة)
+# - النسخة المبنية محليًا (تُبنى داخل الصورة في المرحلة الأولى)
+# - الأسرار والإعدادات المحلية
 node_modules
 **/node_modules
 dist
 .git
 .gitignore
 .mythex
+.attachments
 .env
 .env.mythex
+.env.*
 docs
-scripts
-src
-public
-index.html
 README.md
 Dockerfile
 .dockerignore
+
+# ملاحظة: src · public · index.html · scripts · brand · vite.config.ts · tsconfig*
+# تبقى داخل السياق لأن المرحلة الأولى تبني الواجهة داخل الصورة.

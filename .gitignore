@@ -6,4 +6,8 @@ dist
 .env
 .env.mythex
 .mythex/
-public/icons/
+
+# أيقونات التطبيق (public/icons) مُخزَّنة في المستودع عن قصد:
+# بناء صورة Docker على الاستضافة ينسخ مجلد public كما هو، ولا يحتوي ImageMagick،
+# فتكون الأيقونات المولَّدة جاهزة بدل الأيقونة الاحتياطية.
+# لتوليدها من جديد بعد تغيير الشعار: node scripts/gen-icons.mjs --from-brand
