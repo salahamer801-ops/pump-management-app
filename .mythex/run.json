@@ -1,0 +1,16 @@
+{
+  "services": [
+    {
+      "name": "web",
+      "command": "npm run dev",
+      "port": 5173,
+      "web": true,
+      "setup": "npm install --no-audit --no-fund",
+      "deploy": {
+        "build": "npm run build",
+        "static": "dist",
+        "runtime": "static"
+      }
+    }
+  ]
+}
