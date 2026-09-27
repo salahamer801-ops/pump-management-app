@@ -26,6 +26,9 @@ import {
   TextInput,
 } from "../../components/ui";
 import { formatDateTime } from "../../format";
+import { InstallAppCard } from "../../components/InstallApp";
+import { SyncSettingsCard } from "../SyncPanel";
+import PushCard from "../PushCard";
 
 export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
   const { state, actions } = useShareholder();
@@ -48,6 +51,11 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
           {t("الإعدادات", "Settings")}
         </h1>
       </div>
+
+      {/* المزامنة مع المسؤول + التطبيق على الجوال + الإشعارات */}
+      <SyncSettingsCard />
+      <InstallAppCard />
+      <PushCard />
 
       {/* الملف الشخصي */}
       <Card className="p-5">
@@ -181,8 +189,8 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
           <div className="space-y-2">
             <p>
               {t(
-                "بياناتك محفوظة محليًا على جهازك فقط، ولا تُرسل إلى أي خادم خارجي، ولا نشاركها مع أي طرف ثالث.",
-                "Your data is stored locally on your device only, is not sent to any external server, and is never shared with third parties."
+                "بيانات المضخات المرتبطة بحسابك محفوظة على الخادم الرسمي للمشروع (قاعدة بياناته) حتى يراك ما يسجّله المسؤول من أي جهاز — وأنت لا تعدّل شيئًا من سجله. سجلك الشخصي وملفك يبقيان على جهازك، ولا تُشارك بياناتك مع أي طرف ثالث.",
+                "Data for the pumps linked to your account is stored on the project's official server so you see what the manager records from any device — you cannot change their records. Your personal ledger stays on your device, and your data is never shared with third parties."
               )}
             </p>
             <p>

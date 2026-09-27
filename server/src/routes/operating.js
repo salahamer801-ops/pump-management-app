@@ -15,6 +15,13 @@ import { Router } from "express";
 import { q, withTransaction } from "../db.js";
 import { logAudit } from "../audit.js";
 import {
+  getPublicKey,
+  newNotifications,
+  notifyPumpMembers,
+  removeSubscription,
+  saveSubscription,
+} from "../push.js";
+import {
   badRequest,
   conflict,
   forbidden,
@@ -454,6 +461,7 @@ async function readOperating(pumpId, userId) {
     finance,
     personal,
     sync,
+    reads,
   ] = await Promise.all([
     q(`SELECT * FROM pump_settings WHERE pump_id = $1`, [pumpId]),
     q(`SELECT * FROM pump_people WHERE pump_id = $1 AND deleted_at IS NULL ORDER BY created_at`, [pumpId]),
@@ -471,6 +479,11 @@ async function readOperating(pumpId, userId) {
       userId,
     ]),
     q(`SELECT * FROM pump_sync WHERE pump_id = $1`, [pumpId]),
+    /* الإشعارات التي قرأها هذا المستخدم بنفسه (علم شخصي، لا يمسّ سجل المسؤول) */
+    q(`SELECT notification_id FROM notification_reads WHERE pump_id = $1 AND user_id = $2`, [
+      pumpId,
+      userId,
+    ]),
   ]);
 
   const syncRow = sync.rows[0] ?? null;
@@ -490,6 +503,8 @@ async function readOperating(pumpId, userId) {
     personalRecords: personal.rows.map(rowOut),
     /* كيانات لم تُنمذَج كأعمدة (حقوق، تسويات، تصحيحات…) — تُعاد كما حُفظت */
     extra: syncRow?.extra && typeof syncRow.extra === "object" ? syncRow.extra : {},
+    /* تمييز «جديد» لكل مستخدم على حدة */
+    readNotificationIds: reads.rows.map((r) => r.notification_id),
     meta: {
       version: syncRow ? Number(syncRow.version) : 0,
       migratedAt: syncRow?.migrated_at ?? null,
@@ -527,6 +542,63 @@ operatingRouter.get(
       membership: membership ? { id: membership.id, membershipType: membership.membership_type } : null,
       ...data,
     });
+  })
+);
+
+/**
+ * فحص خفيف قبل التنزيل: رقم النسخة ووقت آخر رفع فقط.
+ * جهاز المساهم يسأل هذا المسار كل دقيقة؛ فإن لم تتغير النسخة لا ينزّل شيئًا
+ * (اقتصاد في البيانات والبطارية ومعالجة قاعدة البيانات).
+ */
+operatingRouter.get(
+  "/pumps/:pumpId/operating/version",
+  wrap(async (req, res) => {
+    const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
+    const r = await q(`SELECT version, last_push_at, migrated_at FROM pump_sync WHERE pump_id = $1`, [pump.id]);
+    const row = r.rows[0] ?? null;
+    res.json({
+      version: row ? Number(row.version) : 0,
+      lastPushAt: row?.last_push_at ?? null,
+      migratedAt: row?.migrated_at ?? null,
+      serverTime: nowIso(),
+    });
+  })
+);
+
+/**
+ * تمييز إشعارات المسؤول كمقروءة — لهذا المستخدم وحده.
+ * بلا `ids` تُعلَّم كل إشعارات المضخة الحالية مقروءة له.
+ * لا يُعدَّل أي إشعار في سجل المسؤول: هذا جدول علامات شخصية.
+ */
+operatingRouter.post(
+  "/pumps/:pumpId/notifications/read",
+  wrap(async (req, res) => {
+    const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
+    const body = req.body ?? {};
+    let ids = Array.isArray(body.ids) ? body.ids.filter(validEntityId).slice(0, 500) : null;
+
+    if (!ids) {
+      const row = await q(`SELECT extra FROM pump_sync WHERE pump_id = $1`, [pump.id]);
+      const list = row.rows[0]?.extra?.notifications;
+      ids = Array.isArray(list)
+        ? list.map((n) => String((n && n.id) || "")).filter(validEntityId).slice(0, 500)
+        : [];
+    }
+
+    if (ids.length) {
+      await q(
+        `INSERT INTO notification_reads (pump_id, user_id, notification_id)
+         SELECT $1, $2, unnest($3::text[])
+         ON CONFLICT (pump_id, user_id, notification_id) DO NOTHING`,
+        [pump.id, req.user.id, ids]
+      );
+    }
+
+    const reads = await q(
+      `SELECT notification_id FROM notification_reads WHERE pump_id = $1 AND user_id = $2`,
+      [pump.id, req.user.id]
+    );
+    res.json({ readNotificationIds: reads.rows.map((r) => r.notification_id) });
   })
 );
 
@@ -734,7 +806,96 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
 
   const after = await readOperating(pump.id, req.user.id);
   res.json({ counts, meta: after.meta, serverTime: nowIso() });
+
+  /* الإشعارات الفورية بعد نجاح الحفظ (لا تُفشل الطلب إن تعذّرت) */
+  void notifyMembersOfChanges(req, pump, data, migration);
 }
+
+/**
+ * إرسال إشعارات الجوال لمساهمي المضخة بعد حفظ المسؤول:
+ *  - إشعارات جديدة يكتبها المسؤول في التطبيق → تُرسَل بنصّها فورًا.
+ *  - وإلا: إشعار عام «حُدِّثت بيانات المضخة» بفاصل لا يقل عن ١٠ دقائق (بلا إزعاج).
+ */
+async function notifyMembersOfChanges(req, pump, data, migration) {
+  if (migration) return;
+  try {
+    const prev = await q(`SELECT extra, last_notified_at FROM pump_sync WHERE pump_id = $1`, [pump.id]);
+    const previousExtra = prev.rows[0]?.extra ?? {};
+    const lastAt = prev.rows[0]?.last_notified_at ? new Date(prev.rows[0].last_notified_at).getTime() : 0;
+
+    const fresh = newNotifications(previousExtra, data.extra ?? {});
+    let payload = null;
+
+    if (fresh.length === 1) {
+      payload = {
+        title: fresh[0].title,
+        body: fresh[0].body,
+        level: fresh[0].level,
+        url: "/",
+        tag: `pump-notif-${fresh[0].id}`,
+      };
+    } else if (fresh.length > 1) {
+      payload = {
+        title: "تنبيهات جديدة من مسؤول المضخة",
+        body: fresh.map((n) => `• ${n.title}`).join("\n"),
+        level: fresh.some((n) => n.level === "danger") ? "danger" : "info",
+        url: "/",
+        tag: `pump-notifs-${pump.id}`,
+      };
+    } else if (Date.now() - lastAt > 10 * 60 * 1000) {
+      /* لا إشعار جديد، لكن البيانات تغيّرت: تنبيه عام بفاصل ١٠ دقائق كحد أدنى */
+      payload = {
+        title: "المسؤول حدّث بيانات المضخة",
+        body: `${pump.name}: توجد تحديثات جديدة — افتح التطبيق للتحديث.`,
+        level: "info",
+        url: "/",
+        tag: `pump-update-${pump.id}`,
+      };
+    }
+
+    if (!payload) return;
+    const result = await notifyPumpMembers(pump.id, payload, req.user.id);
+    if (result.sent > 0) {
+      await q(`UPDATE pump_sync SET last_notified_at = now() WHERE pump_id = $1`, [pump.id]);
+    }
+  } catch (err) {
+    console.error("[push] تعذّر إرسال الإشعارات:", err?.message || err);
+  }
+}
+
+/* ------------------------- الإشعارات الفورية (Web Push) ------------------------- */
+
+/** مفتاح VAPID العام — يحتاجه الجهاز للاشتراك */
+operatingRouter.get(
+  "/pumps/:pumpId/push/key",
+  wrap(async (req, res) => {
+    await requireOperatingRead(req.params.pumpId, req.user);
+    res.json({ publicKey: await getPublicKey() });
+  })
+);
+
+/** تسجيل اشتراك جهاز المستخدم على هذه المضخة */
+operatingRouter.post(
+  "/pumps/:pumpId/push/subscribe",
+  wrap(async (req, res) => {
+    const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
+    const subscription = req.body?.subscription ?? req.body;
+    const saved = await saveSubscription(pump.id, req.user.id, subscription ?? {});
+    if (!saved) throw badRequest("اشتراك الإشعارات غير صالح.");
+    res.json({ subscribed: true });
+  })
+);
+
+/** إلغاء اشتراك جهاز (أو كل أجهزة المستخدم على المضخة) */
+operatingRouter.post(
+  "/pumps/:pumpId/push/unsubscribe",
+  wrap(async (req, res) => {
+    const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
+    const endpoint = req.body?.endpoint ? String(req.body.endpoint).slice(0, 600) : "";
+    await removeSubscription(req.user.id, endpoint);
+    res.json({ subscribed: false });
+  })
+);
 
 operatingRouter.put(
   "/pumps/:pumpId/operating",

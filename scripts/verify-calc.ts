@@ -25,6 +25,17 @@ import {
   stoppageMinutesInRange as stoppageIn,
 } from "../src/domain/rules";
 import { durationMin, formatTimeAmPm, formatTimeRange, minutesToTime, timeToMinutes, todayISO, uid } from "../src/domain/util";
+import {
+  formatRelativeAr,
+  isStaleSince,
+  lastUpdateLabel,
+  myNotifications,
+  unreadNotifications,
+} from "../src/domain/syncStatus";
+import { applyPayload, payloadFromState } from "../src/domain/serverSync";
+import { mergeReadIds } from "../src/shareholder/officialSync";
+import { urlBase64ToUint8Array } from "../src/shareholder/push";
+import { newNotifications } from "../server/src/push-payload.js";
 import type {
   AppState,
   BaseRosterMember,
@@ -827,6 +838,133 @@ check(
 check(
   "23و) نطاق يعبر منتصف الليل: 6:00 ص ← 2:00 ص",
   formatTimeRange("06:00", "02:00") === "6:00 ص ← 2:00 ص"
+);
+
+/* ------------- 24) المزامنة: «آخر تحديث» و«جديد» وإشعارات المسؤول --------- */
+
+const now = new Date("2026-05-10T12:00:00.000Z");
+check(
+  "24) صيغة «آخر تحديث» بالعربية: الآن · دقيقة · دقيقتين · 5 دقائق",
+  formatRelativeAr("2026-05-10T11:59:50.000Z", now) === "الآن" &&
+    formatRelativeAr("2026-05-10T11:59:00.000Z", now) === "قبل دقيقة" &&
+    formatRelativeAr("2026-05-10T11:58:00.000Z", now) === "قبل دقيقتين" &&
+    formatRelativeAr("2026-05-10T11:55:00.000Z", now) === "قبل 5 دقائق",
+  [
+    formatRelativeAr("2026-05-10T11:59:00.000Z", now),
+    formatRelativeAr("2026-05-10T11:58:00.000Z", now),
+    formatRelativeAr("2026-05-10T11:55:00.000Z", now),
+  ]
+);
+check(
+  "24ب) الساعات والأيام: ساعتين · 3 ساعات · أمس · —",
+  formatRelativeAr("2026-05-10T10:00:00.000Z", now) === "قبل ساعتين" &&
+    formatRelativeAr("2026-05-10T09:00:00.000Z", now) === "قبل 3 ساعات" &&
+    formatRelativeAr("2026-05-09T09:00:00.000Z", now) === "أمس" &&
+    formatRelativeAr(null, now) === "—"
+);
+check(
+  "24ج) «لم يُحدَّث بعد» عند غياب وقت المزامنة",
+  lastUpdateLabel(null, now) === "لم يُحدَّث بعد على هذا الجهاز" &&
+    lastUpdateLabel("2026-05-10T11:55:00.000Z", now) === "آخر تحديث: قبل 5 دقائق"
+);
+check(
+  "24د) كشف القِدم: بلا وقت = قديم · قبل 3 ساعات = قديم · قبل دقيقة = حديث",
+  isStaleSince(null, 30, now) === true &&
+    isStaleSince("2026-05-10T09:00:00.000Z", 30, now) === true &&
+    isStaleSince("2026-05-10T11:59:00.000Z", 30, now) === false
+);
+
+/* إشعاراتي: العامة + الموجَّهة لي فقط، و«جديد» علم شخصي */
+const notifications = [
+  { id: "n1", personId: null, read: false },
+  { id: "n2", personId: "p-me", read: false },
+  { id: "n3", personId: "p-other", read: false },
+  { id: "n4", personId: "p-me", read: false },
+];
+check(
+  "24هـ) إشعاراتي = العامة + الموجَّهة إليّ (بلا إشعارات غيري)",
+  myNotifications(notifications, "p-me")
+    .map((n) => n.id)
+    .join(",") === "n1,n2,n4"
+);
+check(
+  "24و) «جديد» يسقط بما قرأته أنا فقط، ولا يمسّ إشعارات غيري",
+  unreadNotifications(notifications, ["n1"], "p-me")
+    .map((n) => n.id)
+    .join(",") === "n2,n4" &&
+    unreadNotifications(notifications, ["n2", "n4"], "p-me").map((n) => n.id).join(",") === "n1" &&
+    unreadNotifications(notifications, [], "p-other").map((n) => n.id).join(",") === "n1,n3"
+);
+check(
+  "24ز) دمج معرّفات القراءة (الخادم + المحلي) بلا تكرار",
+  mergeReadIds(["a", "b"], ["b", "c", undefined as unknown as string]).join(",") === "a,b,c"
+);
+
+/* إشعارات المسؤول تُرفع إلى الخادم وتُستعاد على جهاز آخر (المزامنة عبر الأجهزة) */
+const notifyState: AppState = {
+  ...emptyState(),
+  notifications: [
+    {
+      id: "notif-1",
+      at: "2026-05-10T08:00:00.000Z",
+      kind: "turn_changed",
+      level: "warn",
+      title: "تغيير دورك",
+      body: "دورك اليوم صار 8:00 ص",
+      personId: "p-me",
+      dayId: null,
+      read: false,
+    },
+  ],
+};
+const notifyPayload = payloadFromState(notifyState);
+check(
+  "24ح) إشعارات المسؤول تُرفع مع بيانات التشغيل (extra.notifications)",
+  Array.isArray((notifyPayload.extra as { notifications?: unknown[] })?.notifications) &&
+    (notifyPayload.extra as { notifications: unknown[] }).notifications.length === 1
+);
+const restored = applyPayload(emptyState(), notifyPayload);
+check(
+  "24ط) جهاز جديد يستعيد إشعارات المسؤول من الخادم",
+  restored.notifications.length === 1 && restored.notifications[0].title === "تغيير دورك"
+);
+
+/* ------------------- 25) الإشعارات الفورية (Web Push) ------------------- */
+
+const previousExtra = { notifications: [{ id: "n-old", title: "قديم", body: "" }] };
+const nextExtra = {
+  notifications: [
+    { id: "n-new-1", title: "تغيير دورك اليوم", body: "صار دورك 6:00 ص ← 8:00 ص", level: "warn" },
+    { id: "n-new-2", title: "تذكير: دورك غدًا", body: "جهّز نفسك", level: "info" },
+    { id: "n-old", title: "قديم", body: "" },
+    { id: "n-new-3", title: "توقّف المضخة", body: "عطل", level: "danger" },
+    { id: "n-new-4", title: "خامس", body: "" },
+  ],
+};
+const fresh = newNotifications(previousExtra, nextExtra);
+check(
+  "25) الإشعار الفوري يُرسَل للإشعارات الجديدة فقط (وبحد ٣ في المرة)",
+  fresh.map((n) => n.id).join(",") === "n-new-1,n-new-2,n-new-3",
+  fresh.map((n) => n.id)
+);
+check(
+  "25ب) الإشعار الفوري يحمل العنوان والنص والمستوى، وبلا تكرار عند إعادة الحفظ",
+  fresh[0].title === "تغيير دورك اليوم" &&
+    fresh[0].level === "warn" &&
+    newNotifications({ notifications: nextExtra.notifications }, nextExtra).length === 0
+);
+check(
+  "25ج) إشعار بلا عنوان يأخذ نصًّا افتراضيًا (لا يظهر فارغًا)",
+  newNotifications({}, { notifications: [{ id: "x" }] })[0].title === "تنبيه من مسؤول المضخة"
+);
+
+/* مفتاح اشتراك المتصفح (base64url) → ٦٥ بايت تبدأ بـ 0x04 */
+const sampleVapid = "BEqF8a-WBQ8U_5333A3N8G1rITiNbnRJT8UzfR6yXUpbp9Tbtg0T-4GADAmCv58Tk5jLDOw6J4b1zIuCe-86KqM";
+const decoded = urlBase64ToUint8Array(sampleVapid);
+check(
+  "25د) فكّ مفتاح الإشعارات: ٦٥ بايت وأول بايت ٤ (صيغة VAPID الصحيحة)",
+  decoded.length === 65 && decoded[0] === 4,
+  [decoded.length, decoded[0]]
 );
 
 console.log(`\n${passed} ناجح · ${failed} فاشل`);

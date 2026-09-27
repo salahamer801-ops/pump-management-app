@@ -23,6 +23,7 @@ import type { AppState, Currency, EnergyType } from "../../domain/types";
 import { normalizeState } from "../../domain/migrate";
 import {formatClock, formatTimeRange, todayISO} from "../../domain/util";
 import { Button, Card, Field, Modal, NumberInput, Pill, Select, TextArea, TextInput, TimeInput, cx } from "../../components/ui";
+import { InstallAppCard } from "../../components/InstallApp";
 import { BRAND_NAME, BrandLogo } from "../../components/Brand";
 
 const currencyLabel = (c: Currency) => (c === "YER" ? "ريال يمني" : c === "SAR" ? "ريال سعودي" : "دولار");
@@ -150,6 +151,8 @@ export default function SettingsScreen({
           ) : null}
         </div>
       </Card>
+      {/* التطبيق على جوال المسؤول — أيقونة على الشاشة الرئيسية بلا متجر تطبيقات */}
+      <InstallAppCard />
       <Card className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <Droplets size={16} className="text-sky-600 dark:text-sky-300" />

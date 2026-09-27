@@ -526,6 +526,40 @@ CREATE TABLE IF NOT EXISTS pump_sync (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+/*
+ * تمييز إشعارات المسؤول كمقروءة — لكل مستخدم على حدة.
+ * «جديد» علم شخصي: ما قرأه مساهم لا يصير مقروءًا عند غيره، ولا يُعدَّل سجل المسؤول.
+ */
+CREATE TABLE IF NOT EXISTS notification_reads (
+  pump_id uuid NOT NULL REFERENCES pumps(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  notification_id text NOT NULL,
+  read_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (pump_id, user_id, notification_id)
+);
+CREATE INDEX IF NOT EXISTS notification_reads_user_idx ON notification_reads(user_id);
+
+/*
+ * اشتراكات الإشعارات الفورية (Web Push) — لكل مستخدم ولكل مضخة على حدة.
+ * تُرسَل لحظة حفظ المسؤول لتعديل (داخل الطلب الوارد نفسه، فلا حاجة لمهام مجدولة).
+ */
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pump_id uuid NOT NULL REFERENCES pumps(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint text NOT NULL UNIQUE,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  failures integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_pump_idx ON push_subscriptions(pump_id);
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id);
+
+/* آخر مرة أُرسل فيها إشعار «تحديث عام» لهذه المضخة (لتقليل الإزعاج) */
+ALTER TABLE pump_sync ADD COLUMN IF NOT EXISTS last_notified_at timestamptz;
+
 `;
 
 let ready = null;

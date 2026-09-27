@@ -17,14 +17,21 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "autoUpdate",
+      /*
+       * "prompt": لا يُعاد تحميل الصفحة فوق عمل المستخدم. تُسجَّل النسخة الجديدة
+       * بالانتظار ويظهر شريط «نسخة جديدة متاحة — أعد التحميل» (UpdateNotice).
+       */
+      registerType: "prompt",
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",
         "icons/apple-touch-icon.png",
         "brand/app-icon.webp",
+        "push-sw.js",
       ],
       manifest: {
+        id: "/",
+        scope: "/",
         name: "مشروع تنظيم المضخات",
         short_name: "تنظيم المضخات",
         description:
@@ -32,8 +39,10 @@ export default defineConfig({
         lang: "ar",
         dir: "rtl",
         display: "standalone",
+        display_override: ["standalone", "minimal-ui"],
         orientation: "portrait",
         start_url: "/",
+        categories: ["productivity", "utilities"],
         background_color: "#032a4c",
         theme_color: "#032a4c",
         icons: [
@@ -54,6 +63,13 @@ export default defineConfig({
             purpose: "maskable",
           },
         ],
+      },
+      workbox: {
+        /* معالج الإشعارات الفورية: يُستورد داخل العامل الخدمي */
+        importScripts: ["push-sw.js"],
+        /* لا يُخدَم أي نداء API من الكاش: البيانات الرسمية تأتي من الخادم دائمًا */
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true,
       },
     }),
   ],

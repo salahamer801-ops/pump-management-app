@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   BadgeCheck,
   CalendarClock,
@@ -23,13 +23,15 @@ import { activeCycles, currentDayOfCycle, findPump } from "../selectors";
 import { cycleDayDate } from "../calc";
 import { formatDayDate, formatHours, formatLiters, formatMoneyYER, gregorianToday, hijriToday } from "../format";
 import { Button, Card, EmptyState, Pill, cx } from "../../components/ui";
+import { InstallAppCard } from "../../components/InstallApp";
 import {
   linkedPumpViews,
   localPumpViews,
   nearestTurnAcross,
   type LinkedPumpView,
 } from "../pumpView";
-import { syncOfficialPumps } from "../officialSync";
+import { useOfficialSync } from "../useOfficialSync";
+import { SyncStatusBar } from "../SyncPanel";
 
 type Tab = "home" | "pumps" | "cycles" | "turns" | "official" | "accounts" | "settings";
 
@@ -44,26 +46,10 @@ export default function HomeScreen({ onGoTo }: Props) {
   const localPersonId = readUserLink();
 
   /**
-   * البيانات الرسمية تُقرأ من الخادم (PostgreSQL) لا من جهاز المسؤول،
-   * فيرى المستخدم ما سجّله المسؤول حتى من جهاز آخر.
+   * المزامنة الرسمية تُدار في مكان واحد (useOfficialSync): عند الفتح، والعودة
+   * للتطبيق، وكل دقيقة، وبعد عودة الشبكة. `sync.tick` يُنبّه أن بيانات جديدة وصلت.
    */
-  const [officialTick, setOfficialTick] = useState(0);
-  const approvedKey = memberships
-    .filter((m) => m.status === "approved")
-    .map((m) => m.pumpId)
-    .sort()
-    .join(",");
-  useEffect(() => {
-    if (!approvedKey) return;
-    let alive = true;
-    void syncOfficialPumps(memberships).then(() => {
-      if (alive) setOfficialTick((n) => n + 1);
-    });
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvedKey]);
+  const sync = useOfficialSync();
 
   /**
    * بيانات المضخات المرتبطة — قراءة فقط من سجل المسؤول.
@@ -76,9 +62,9 @@ export default function HomeScreen({ onGoTo }: Props) {
       linked.map((v) => v.pumpId)
     );
     return [...linked, ...locals];
-    // officialTick: يُعاد بناء العرض بعد وصول البيانات الرسمية من الخادم
+    // sync.tick: يُعاد بناء العرض بعد وصول البيانات الرسمية من الخادم
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberships, localPersonId, officialTick]);
+  }, [memberships, localPersonId, sync.tick]);
   const nearest = useMemo(() => nearestTurnAcross(views), [views]);
 
   const myRecords = state.turns
@@ -141,6 +127,10 @@ export default function HomeScreen({ onGoTo }: Props) {
           )}
         </div>
       </div>
+
+      {/* ------------------------ حالة المزامنة + التثبيت ------------------------ */}
+      {hasLinked ? <SyncStatusBar /> : null}
+      <InstallAppCard />
 
       {/* --------------------------- المضخات المرتبطة --------------------------- */}
       {hasLinked ? (

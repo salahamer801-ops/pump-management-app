@@ -39,6 +39,8 @@ export interface OperatingMeta {
 export interface OperatingResponse extends OperatingPayload {
   role: "manager" | "member";
   pump: { id: string; pumpCode: string; name: string; location: string; status: string };
+  /** الإشعارات التي قرأها هذا المستخدم بنفسه على الخادم (علم شخصي) */
+  readNotificationIds?: string[];
   meta: OperatingMeta;
 }
 
@@ -344,6 +346,11 @@ export function payloadFromState(state: AppState): OperatingPayload {
       transferEvents: state.transferEvents,
       corrections: state.corrections,
       counters: state.counters,
+      /**
+       * إشعارات المسؤول — كانت محصورة في جهاز واحد؛ بوجودها هنا يصل التنبيه
+       * إلى المساهم المرتبط بالمضخة على أي جهاز (قراءة فقط لديه).
+       */
+      notifications: state.notifications,
     },
   };
 }
@@ -473,7 +480,16 @@ function extraMerge(state: AppState, payload: OperatingPayload): Partial<AppStat
   const extra = (payload as { extra?: Record<string, unknown> }).extra;
   if (!extra || typeof extra !== "object") return {};
   const out: Partial<AppState> = {};
-  const keys = ["rights", "settlements", "conflictAcks", "conflicts", "transferEvents", "corrections"] as const;
+  const keys = [
+    "rights",
+    "settlements",
+    "conflictAcks",
+    "conflicts",
+    "transferEvents",
+    "corrections",
+    /* الإشعارات تُستعاد على جهاز لا سجل فيه (مساهم على جهازه) ولا تُستبدل محليًا */
+    "notifications",
+  ] as const;
   for (const key of keys) {
     const local = state[key] as unknown;
     const remote = extra[key];
@@ -521,6 +537,36 @@ export async function resolveServerPumpId(pumpCode: string): Promise<string | nu
 export async function pullOperating(pumpId: string): Promise<OperatingResponse | null> {
   try {
     return await api<OperatingResponse>(`/api/pumps/${pumpId}/operating`);
+  } catch {
+    return null;
+  }
+}
+
+/** فحص خفيف: رقم النسخة ووقت آخر رفع — بلا تنزيل أي بيانات */
+export async function fetchOperatingVersion(
+  pumpId: string
+): Promise<{ version: number; lastPushAt: string | null } | null> {
+  try {
+    const res = await api<{ version: number; lastPushAt: string | null }>(
+      `/api/pumps/${pumpId}/operating/version`
+    );
+    return { version: Number(res.version) || 0, lastPushAt: res.lastPushAt ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * تمييز إشعارات المسؤول كمقروءة لهذا المستخدم على الخادم.
+ * بلا `ids` تُعلَّم كل إشعارات المضخة مقروءة له — ولا يُعدَّل إشعار المسؤول نفسه.
+ */
+export async function markNotificationsRead(pumpId: string, ids?: string[]): Promise<string[] | null> {
+  try {
+    const res = await api<{ readNotificationIds: string[] }>(`/api/pumps/${pumpId}/notifications/read`, {
+      method: "POST",
+      body: ids && ids.length ? { ids } : {},
+    });
+    return res.readNotificationIds ?? [];
   } catch {
     return null;
   }

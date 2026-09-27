@@ -6,6 +6,7 @@ import ManagerShell from "./manager/ManagerShell";
 import ShareholderApp from "./shareholder/ShareholderApp";
 import AdminApp from "./admin/AdminApp";
 import { BrandSplash } from "./components/Brand";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { clearLegacySession } from "./session";
 
 
@@ -23,6 +24,8 @@ export default function App() {
   return (
     <AuthProvider>
       <Root />
+      {/* إشعار النسخة الجديدة — يظهر في كل الشاشات فوق الشريط السفلي */}
+      <UpdateNotice />
     </AuthProvider>
   );
 }

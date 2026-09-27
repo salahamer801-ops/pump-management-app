@@ -119,6 +119,61 @@ export function readOfficialState(pumpId: string): AppState | null {
   }
 }
 
+/**
+ * بيانات المزامنة الرسمية على هذا الجهاز: رقم نسخة الخادم التي نزلت، وقت آخر
+ * تحديث ناجح، والإشعارات التي قرأها هذا المستخدم — لتُختصر النداءات وتظهر
+ * «آخر تحديث» وشارة «جديد» بلا انتظار.
+ */
+const OFFICIAL_META_PREFIX = "pump-org-official-meta::";
+
+export interface OfficialMeta {
+  version: number;
+  syncedAt: string | null;
+  readNotificationIds: string[];
+}
+
+function officialMetaKey(pumpId: string): string {
+  return `${OFFICIAL_META_PREFIX}${pumpId}`;
+}
+
+export function readOfficialMeta(pumpId: string): OfficialMeta {
+  const empty: OfficialMeta = { version: 0, syncedAt: null, readNotificationIds: [] };
+  try {
+    const raw = localStorage.getItem(officialMetaKey(pumpId));
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as Partial<OfficialMeta>;
+    return {
+      version: Number(parsed.version) || 0,
+      syncedAt: typeof parsed.syncedAt === "string" ? parsed.syncedAt : null,
+      readNotificationIds: Array.isArray(parsed.readNotificationIds)
+        ? parsed.readNotificationIds.filter((x): x is string => typeof x === "string")
+        : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export function saveOfficialMeta(pumpId: string, patch: Partial<OfficialMeta>): OfficialMeta {
+  const next: OfficialMeta = { ...readOfficialMeta(pumpId), ...patch };
+  try {
+    localStorage.setItem(officialMetaKey(pumpId), JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+  return next;
+}
+
+/** أحدث وقت تحديث ناجح بين كل المضخات المرتبطة (للمؤشر العام) */
+export function latestOfficialSyncAt(pumpIds: readonly string[]): string | null {
+  let best: string | null = null;
+  for (const id of pumpIds) {
+    const at = readOfficialMeta(id).syncedAt;
+    if (at && (!best || at > best)) best = at;
+  }
+  return best;
+}
+
 export function readUserLink(): string | null {
   try {
     return localStorage.getItem(USER_LINK_KEY);
