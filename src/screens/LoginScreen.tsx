@@ -12,7 +12,7 @@ import { useAuth } from "../auth/AuthProvider";
 import type { AccountType } from "../auth/types";
 import { ApiError } from "../auth/api";
 import { Button, Field, TextInput, cx } from "../components/ui";
-import { BRAND_NAME, BrandHero } from "../components/Brand";
+import { BRAND_NAME, BrandLogo } from "../components/Brand";
 
 type Tab = "login" | "register" | "forgot";
 
@@ -23,6 +23,13 @@ interface PublicSettings {
 
 const errorText = (err: unknown) =>
   err instanceof ApiError ? err.message : "تعذّر تنفيذ العملية — حاول مرة أخرى.";
+
+/* عناوين المراحل: كل مرحلة لها بطاقة واحدة بعنوان واضح */
+const HEADINGS: Record<Tab, { title: string; subtitle: string }> = {
+  login: { title: "تسجيل الدخول", subtitle: "أدخل رقم هاتفك وكلمة المرور للمتابعة" },
+  register: { title: "إنشاء حساب جديد", subtitle: "حساب شخصي واحد — لا يمكن الدخول إلى حساب غيرك" },
+  forgot: { title: "استعادة كلمة المرور", subtitle: "برقم الهاتف والاسم المسجَّل في حسابك" },
+};
 
 export default function LoginScreen() {
   const [tab, setTab] = useState<Tab>("login");
@@ -49,137 +56,152 @@ export default function LoginScreen() {
   const registrationClosed = system
     ? !system.registration.manager && !system.registration.user
     : false;
+  const heading = HEADINGS[tab];
+
+  const go = (next: Tab) => {
+    setNotice("");
+    setTab(next);
+  };
 
   return (
-    /* شاشة الدخول تملأ الشاشة دائمًا: لوحة شعار كبيرة + لوحة النموذج */
-    <div className="flex min-h-dvh w-full flex-col bg-gray-50 lg:flex-row" data-testid="login-screen">
-      <aside className="relative flex flex-col justify-between overflow-hidden bg-gradient-to-br from-sky-700 via-blue-900 to-slate-950 px-6 py-8 text-white lg:w-1/2 lg:py-12">
-        <span className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
-        <span className="pointer-events-none absolute -bottom-24 -left-16 h-80 w-80 rounded-full bg-sky-400/20 blur-3xl" />
+    /* خلفية كحلية كاملة للشاشة، وبطاقة بيضاء واحدة في الوسط للنموذج */
+    <div
+      className="relative flex min-h-dvh w-full flex-col overflow-hidden bg-[#04101f]"
+      data-testid="login-screen"
+    >
+      {/* طبقات العمق والضوء */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0d2b4e] via-[#0a1d36] to-[#04101f]" />
+      <span className="pointer-events-none absolute -top-32 right-[-12%] h-80 w-80 rounded-full bg-sky-500/25 blur-3xl" />
+      <span className="pointer-events-none absolute -bottom-24 left-[-10%] h-96 w-96 rounded-full bg-emerald-500/15 blur-3xl" />
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/15" />
+      <span
+        className="pointer-events-none absolute inset-0 opacity-[0.06]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+        }}
+      />
 
-        <div className="relative flex flex-1 flex-col items-center justify-center gap-5 py-4 text-center">
-          <BrandHero />
-          <h1 className="text-3xl font-black sm:text-4xl">{BRAND_NAME}</h1>
-          <p className="max-w-sm text-sm font-bold leading-relaxed text-sky-50/85">
-            حسابك الشخصي يحمي بياناتك — الدخول برقم الهاتف وكلمة المرور
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {["الديالات", "الأدوار", "الحصص", "الحسابات"].map((item) => (
-              <span
-                key={item}
-                className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-extrabold backdrop-blur"
-              >
-                {item}
-              </span>
-            ))}
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-9 sm:px-6">
+        <div className="w-full max-w-md">
+          {/* الهوية */}
+          <div className="mb-6 flex flex-col items-center text-center">
+            <BrandLogo size={84} rounded="rounded-3xl" className="ring-1 ring-white/25" />
+            <h1 className="mt-4 text-2xl font-black text-white sm:text-[28px]">{BRAND_NAME}</h1>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+              {["الديالات", "الأدوار", "الحصص", "الحسابات"].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-extrabold text-sky-100/90 ring-1 ring-inset ring-white/10"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <p className="relative text-center text-[11px] text-sky-50/60">
-          برمجة وتطوير: المهندس/ عبدالملك عامر
-        </p>
-      </aside>
-
-      <main className="flex flex-1 flex-col px-5 py-8 lg:justify-center lg:px-12">
-        <div className="mx-auto w-full max-w-md">
           {announcement?.active && announcement.text.trim() ? (
             <div
               data-testid="login-announcement"
-              className={`mb-4 rounded-2xl border px-4 py-3 text-[11px] font-bold leading-relaxed ${
+              className={cx(
+                "mb-4 rounded-2xl px-4 py-3 text-[11px] font-bold leading-relaxed ring-1 ring-inset backdrop-blur",
                 announcement.tone === "danger"
-                  ? "border-red-100 bg-red-50 text-red-800"
+                  ? "bg-red-500/15 text-red-50 ring-red-400/30"
                   : announcement.tone === "warn"
-                    ? "border-amber-100 bg-amber-50 text-amber-800"
-                    : "border-sky-100 bg-sky-50 text-sky-800"
-              }`}
+                    ? "bg-amber-400/15 text-amber-50 ring-amber-300/30"
+                    : "bg-sky-400/15 text-sky-50 ring-sky-300/30"
+              )}
             >
               {announcement.text}
             </div>
           ) : null}
 
           {registrationClosed ? (
-            <p className="mb-4 rounded-2xl bg-gray-100 px-4 py-3 text-center text-[11px] font-bold text-gray-600">
+            <p className="mb-4 rounded-2xl bg-white/10 px-4 py-3 text-center text-[11px] font-bold text-sky-100 ring-1 ring-inset ring-white/10">
               إنشاء الحسابات متوقف حاليًا — تواصل مع مسؤول النظام.
             </p>
           ) : null}
 
-          <div className="mb-5 grid grid-cols-3 gap-1 rounded-2xl bg-gray-100 p-1">
-            <TabButton active={tab === "login"} onClick={() => setTab("login")} label="دخول" />
-            <TabButton active={tab === "register"} onClick={() => setTab("register")} label="حساب جديد" />
-            <TabButton active={tab === "forgot"} onClick={() => setTab("forgot")} label="نسيت كلمة المرور" />
-          </div>
-
           {notice ? (
             <p
-              className="mb-4 rounded-2xl bg-emerald-50 px-4 py-3 text-center text-xs font-bold text-emerald-800"
+              className="mb-4 rounded-2xl bg-emerald-500/15 px-4 py-3 text-center text-xs font-bold text-emerald-50 ring-1 ring-inset ring-emerald-400/30"
               data-testid="auth-notice"
             >
               {notice}
             </p>
           ) : null}
 
-          {tab === "login" ? (
-            <LoginForm
-              onDone={() => setNotice("")}
-              onForgot={() => {
-                setNotice("");
-                setTab("forgot");
-              }}
-              onRegister={() => {
-                setNotice("");
-                setTab("register");
-              }}
-            />
-          ) : null}
+          {/* البطاقة */}
+          <div className="rounded-3xl bg-white p-5 shadow-2xl shadow-slate-950/50 ring-1 ring-white/25 sm:p-7">
+            <header className="mb-5 text-center">
+              <h2 className="text-xl font-black text-slate-900" data-testid="auth-title">
+                {heading.title}
+              </h2>
+              <p className="mt-1 text-[11px] font-bold text-slate-500">{heading.subtitle}</p>
+            </header>
 
-          {tab === "register" ? (
-            <RegisterForm
-              onDone={() => {
-                /* رد واضح بعد إنشاء الحساب: لا يبدو الزر كأنه لم يستجب */
-                setNotice("تم إنشاء الحساب بنجاح — سجّل الدخول الآن برقم هاتفك وكلمة المرور.");
-                setTab("login");
-              }}
-            />
-          ) : null}
+            {tab === "login" ? (
+              <LoginForm
+                onDone={() => setNotice("")}
+                onGo={go}
+                canRegister={!system ? true : system.registration.manager || system.registration.user}
+              />
+            ) : null}
 
-          {tab === "forgot" ? (
-            <ForgotForm
-              onDone={(message) => {
-                setNotice(message);
-                setTab("login");
-              }}
-            />
-          ) : null}
-        </div>
+            {tab === "register" ? (
+              <RegisterForm
+                onGo={go}
+                onDone={() => {
+                  /* رد واضح بعد إنشاء الحساب: لا يبدو الزر كأنه لم يستجب */
+                  setNotice("تم إنشاء الحساب بنجاح — سجّل الدخول الآن برقم هاتفك وكلمة المرور.");
+                  setTab("login");
+                }}
+              />
+            ) : null}
 
-        <div className="mt-auto pt-8 text-center text-xs text-gray-400 lg:hidden">
-          برمجة وتطوير: المهندس/ عبدالملك عامر
+            {tab === "forgot" ? (
+              <ForgotForm
+                onGo={go}
+                onDone={(message) => {
+                  setNotice(message);
+                  setTab("login");
+                }}
+              />
+            ) : null}
+          </div>
+
+          <p className="mt-6 flex items-center justify-center gap-2 text-[11px] font-bold text-sky-100/55">
+            <ShieldCheck size={13} />
+            دخول آمن — كلمة المرور مُشفَّرة ولا يمكن قراءتها
+          </p>
+          <p className="mt-2 text-center text-[11px] text-sky-100/35">
+            برمجة وتطوير: المهندس/ عبدالملك عامر
+          </p>
         </div>
       </main>
     </div>
   );
 }
 
-function TabButton({
-  active,
+/** رابط نصّي صغير أسفل البطاقة (الوصول للحساب الجديد/الاستعادة) */
+function TextLink({
   onClick,
-  label,
+  children,
+  testId,
 }: {
-  active: boolean;
   onClick: () => void;
-  label: string;
+  children: React.ReactNode;
+  testId: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={label}
-      className={cx(
-        "rounded-xl py-2 text-[11px] font-extrabold transition",
-        active ? "bg-white text-emerald-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
-      )}
+      data-testid={testId}
+      className="rounded-lg px-1 font-extrabold text-emerald-700 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-800"
     >
-      {label}
+      {children}
     </button>
   );
 }
@@ -201,12 +223,13 @@ function ErrorBox({ message }: { message: string }) {
 
 function LoginForm({
   onDone,
-  onForgot,
-  onRegister,
+  onGo,
+  canRegister,
 }: {
   onDone: () => void;
-  onForgot: () => void;
-  onRegister: () => void;
+  onGo: (tab: Tab) => void;
+  /** يظهر رابط «إنشاء حساب جديد» فقط إذا كان التسجيل مفتوحًا من إدارة النظام */
+  canRegister: boolean;
 }) {
   const { login } = useAuth();
   const [phone, setPhone] = useState("");
@@ -265,24 +288,29 @@ function LoginForm({
       >
         <LogIn size={20} /> {busy ? "جارٍ الدخول…" : "تسجيل الدخول"}
       </Button>
-      <div className="flex items-center justify-between text-xs font-bold">
-        <button type="button" onClick={onRegister} className="text-emerald-700">
-          إنشاء حساب جديد
-        </button>
-        <button type="button" onClick={onForgot} className="text-gray-500">
+
+      {/* الوصول إلى الحساب الجديد والاستعادة: نصّ صغير أسفل البطاقة فقط */}
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+        {canRegister ? (
+          <>
+            <span>ليس لديك حساب؟ </span>
+            <TextLink onClick={() => onGo("register")} testId="login-goto-register">
+              إنشاء حساب جديد
+            </TextLink>
+            <span className="mx-2 text-slate-300">·</span>
+          </>
+        ) : null}
+        <TextLink onClick={() => onGo("forgot")} testId="login-goto-forgot">
           نسيت كلمة المرور؟
-        </button>
+        </TextLink>
       </div>
-      <p className="rounded-2xl bg-gray-50 px-4 py-3 text-[11px] leading-relaxed text-gray-500">
-        الحساب خاص بصاحبه: لا يمكن الدخول إلى حساب شخص آخر. بعد الدخول تُطبَّق صلاحيات حسابك تلقائيًا.
-      </p>
     </div>
   );
 }
 
 /* ------------------------------ إنشاء حساب ----------------------------- */
 
-function RegisterForm({ onDone }: { onDone: () => void }) {
+function RegisterForm({ onDone, onGo }: { onDone: () => void; onGo: (tab: Tab) => void }) {
   const { register } = useAuth();
   const [form, setForm] = useState({
     name: "",
@@ -396,6 +424,13 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           طلب ربط، ثم يوافق المسؤول.
         </p>
       ) : null}
+
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+        <span>لديك حساب؟ </span>
+        <TextLink onClick={() => onGo("login")} testId="register-back-login">
+          رجوع إلى تسجيل الدخول
+        </TextLink>
+      </div>
     </div>
   );
 }
@@ -441,7 +476,7 @@ function TypeCard({
 
 /* --------------------------- نسيت كلمة المرور -------------------------- */
 
-function ForgotForm({ onDone }: { onDone: (message: string) => void }) {
+function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo: (tab: Tab) => void }) {
   const { forgotPassword, resetPassword } = useAuth();
   const [step, setStep] = useState<"request" | "reset">("request");
   const [phone, setPhone] = useState("");
@@ -579,6 +614,13 @@ function ForgotForm({ onDone }: { onDone: (message: string) => void }) {
           <ArrowRight size={18} /> {busy ? "جارٍ التحقق…" : "تحقّق وأظهر رمز الاستعادة"}
         </Button>
       )}
+
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+        <span>تذكّرت كلمة المرور؟ </span>
+        <TextLink onClick={() => onGo("login")} testId="forgot-back-login">
+          رجوع إلى تسجيل الدخول
+        </TextLink>
+      </div>
     </div>
   );
 }
