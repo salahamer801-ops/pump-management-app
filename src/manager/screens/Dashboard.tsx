@@ -20,13 +20,14 @@ import {
   Wrench,
 } from "lucide-react";
 import { useApp } from "../../store";
-import type { AppState, DialaDay, DayEntry } from "../../domain/types";
 import type { ManagerTab } from "../ManagerApp";
 import {
   activeShareholders,
   comparePerson,
   currentDialaDay,
   dayEntries,
+  dayNumberInRound,
+  dayOrdinal,
   daySummary,
   dialaDayLabel,
   debtors,
@@ -35,25 +36,134 @@ import {
   personName,
   pumpFinancials,
   pumpWindow,
+  dayTurnRows,
+  type DayTurnRow,
+  roundOfDay,
   scheduleRows,
-  shareholderOfPerson,
   totalUnits,
 } from "../../domain/rules";
-import { formatDuration, hijriDate, isoToDisplay, isoToShort, toHours, todayISO } from "../../domain/util";
+import {formatDuration, formatTimeRange, hijriDate, isoToDisplay, isoToShort, todayISO, toHours} from "../../domain/util";
 import { formatMoney, formatNumber } from "../../format";
 import { Button, Card, EmptyState, Pill, StatCard, cx } from "../../components/ui";
+import { DayStatusPill } from "../../components/StatusPills";
 
 /* --------------------------- إجراءات سريعة --------------------------- */
 
-type QuickTone = "emerald" | "amber" | "sky" | "violet" | "rose";
+type QuickTone = "cyan" | "amber" | "emerald" | "violet" | "rose";
 
-const TONE_TILE: Record<QuickTone, string> = {
-  emerald: "border-emerald-100 bg-emerald-50/70 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300",
-  amber: "border-amber-100 bg-amber-50/70 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300",
-  sky: "border-sky-100 bg-sky-50/70 text-sky-700 dark:border-sky-900/40 dark:bg-sky-900/20 dark:text-sky-300",
-  violet: "border-violet-100 bg-violet-50/70 text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300",
-  rose: "border-rose-100 bg-rose-50/70 text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300",
+/** لوحة الأقسام: لكل قسم لون، فلا تسيطر درجة واحدة على الشاشة */
+type AccentTone =
+  | "sky"
+  | "teal"
+  | "cyan"
+  | "amber"
+  | "violet"
+  | "indigo"
+  | "orange"
+  | "emerald"
+  | "rose";
+
+const ACCENT: Record<AccentTone, { chip: string; link: string }> = {
+  sky: {
+    chip: "bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-300",
+    link: "text-sky-600 dark:text-sky-400",
+  },
+  teal: {
+    chip: "bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-300",
+    link: "text-teal-600 dark:text-teal-400",
+  },
+  cyan: {
+    chip: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300",
+    link: "text-cyan-600 dark:text-cyan-400",
+  },
+  amber: {
+    chip: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300",
+    link: "text-amber-600 dark:text-amber-400",
+  },
+  violet: {
+    chip: "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300",
+    link: "text-violet-600 dark:text-violet-400",
+  },
+  indigo: {
+    chip: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300",
+    link: "text-indigo-600 dark:text-indigo-400",
+  },
+  orange: {
+    chip: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300",
+    link: "text-orange-600 dark:text-orange-400",
+  },
+  emerald: {
+    chip: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300",
+    link: "text-sky-600 dark:text-sky-400",
+  },
+  rose: {
+    chip: "bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300",
+    link: "text-rose-600 dark:text-rose-400",
+  },
 };
+
+const QUICK_TILE: Record<QuickTone, { tile: string; chip: string }> = {
+  cyan: {
+    tile: "border-cyan-100 bg-cyan-50/60 hover:border-cyan-200 dark:border-cyan-900/40 dark:bg-cyan-900/15",
+    chip: "bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-sm shadow-cyan-500/30",
+  },
+  amber: {
+    tile: "border-amber-100 bg-amber-50/60 hover:border-amber-200 dark:border-amber-900/40 dark:bg-amber-900/15",
+    chip: "bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm shadow-amber-500/30",
+  },
+  emerald: {
+    tile: "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200 dark:border-emerald-900/40 dark:bg-emerald-900/15",
+    chip: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-500/30",
+  },
+  violet: {
+    tile: "border-violet-100 bg-violet-50/60 hover:border-violet-200 dark:border-violet-900/40 dark:bg-violet-900/15",
+    chip: "bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm shadow-violet-500/30",
+  },
+  rose: {
+    tile: "border-rose-100 bg-rose-50/60 hover:border-rose-200 dark:border-rose-900/40 dark:bg-rose-900/15",
+    chip: "bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-sm shadow-rose-500/30",
+  },
+};
+
+/** رأس قسم: أيقونة بلون القسم + عنوان + زر انتقال بنفس اللون */
+function SectionHeader({
+  tone,
+  icon,
+  title,
+  sub,
+  action,
+  actionLabel,
+}: {
+  tone: AccentTone;
+  icon: ReactNode;
+  title: string;
+  sub?: string;
+  action?: () => void;
+  actionLabel?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-start gap-2">
+        <span
+          className={cx("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", ACCENT[tone].chip)}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-extrabold text-gray-800 dark:text-white">
+            {title}
+          </span>
+          {sub ? <span className="block truncate text-[11px] text-gray-400">{sub}</span> : null}
+        </span>
+      </div>
+      {action && actionLabel ? (
+        <button className={cx("shrink-0 pt-1.5 text-xs font-bold", ACCENT[tone].link)} onClick={action}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 /** ألوان دوائر الأشخاص في بطاقات الأدوار */
 const AVATAR_TONES = [
@@ -117,13 +227,21 @@ export default function Dashboard({
       schedule: scheduleRows(state, pump),
       units: totalUnits(state, pump.id),
       shareholders: activeShareholders(state, pump.id).length,
-      turns: buildTurns(state, current, pump.id),
+      turns: dayTurnRows(state, current, pump.id),
+      currentNumber: current ? dayNumberInRound(state, current) : 0,
+      currentRound: current ? roundOfDay(state, current)?.number ?? current.dialaNumber : 0,
     };
   }, [state, pump]);
 
   const currentSummary = stats.current ? daySummary(state, stats.current, pump) : null;
-  const window = pumpWindow(pump);
+  /* نافذة اليوم الحالي إن وُجد (قد تختلف ساعاته عن ساعات المضخة) */
+  const window = pumpWindow(pump, stats.current);
   const pumpRunning = !!stats.current && stats.current.status !== "closed";
+  /** نسبة ساعات اليوم المخطّطة من ساعات التشغيل الكاملة — لشريط التقدّم في بطاقة يوم الديالة */
+  const dayProgress =
+    currentSummary && window.capacityMin > 0
+      ? Math.max(0, Math.min(100, Math.round(((currentSummary.plannedMin || 0) / window.capacityMin) * 100)))
+      : 0;
 
   const alerts: { text: string; tone: "red" | "amber" | "blue"; day?: string }[] = [];
   if (stats.issues.length > 0) {
@@ -161,79 +279,159 @@ export default function Dashboard({
   };
 
   const quickActions: { id: string; label: string; icon: ReactNode; tone: QuickTone; run: () => void }[] = [
-    { id: "use", label: "تسجيل السقي", icon: <Timer size={22} />, tone: "emerald", run: openActualDay },
+    { id: "use", label: "تسجيل السقي", icon: <Timer size={22} />, tone: "cyan", run: openActualDay },
     { id: "fuel", label: "تسجيل وقود", icon: <Fuel size={22} />, tone: "amber", run: () => onGoTab("finance") },
-    { id: "payment", label: "تسجيل دفعة", icon: <CreditCard size={22} />, tone: "sky", run: () => onGoTab("finance") },
+    { id: "payment", label: "تسجيل دفعة", icon: <CreditCard size={22} />, tone: "emerald", run: () => onGoTab("finance") },
     { id: "handover", label: "تسليم دور", icon: <RefreshCcw size={22} />, tone: "violet", run: () => onGoTab("diala") },
     { id: "expense", label: "دفع خارج", icon: <Plus size={22} />, tone: "rose", run: () => onGoTab("finance") },
   ];
 
   return (
-    <div className="space-y-4">
-      <Card className="overflow-hidden">
-        <div className="bg-gradient-to-l from-emerald-600 to-emerald-500 p-5 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <Gauge size={16} /> {pump.name}
+    <div className="space-y-3">
+      {/* البطاقة التعريفية: هوية المضخة والتاريخ — منظّمة في سطور واضحة */}
+      <Card className="@container overflow-hidden" data-testid="pump-identity-card">
+        <div className="relative overflow-hidden bg-gradient-to-l from-brand-800 via-brand-700 to-brand-500 px-4 py-4 text-white sm:px-5">
+          <span className="pointer-events-none absolute -left-12 -top-14 h-40 w-40 rounded-full bg-sky-400/25 blur-2xl" />
+          <span className="pointer-events-none absolute -right-10 -bottom-16 h-36 w-36 rounded-full bg-violet-400/20 blur-2xl" />
+          <span className="pointer-events-none absolute left-1/3 -top-10 h-24 w-24 rounded-full bg-cyan-300/15 blur-2xl" />
+          <div className="relative flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400/40 to-cyan-300/20 text-cyan-50 ring-1 ring-white/25 backdrop-blur">
+              <Gauge size={20} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[clamp(1rem,4.6cqw,1.35rem)] font-black leading-tight">
+                {pump.name}
+              </div>
+              <div className="mt-0.5 truncate text-[clamp(0.62rem,2.6cqw,0.78rem)] text-sky-100/80">
+                {[pump.wells, pump.farm].filter(Boolean).join(" · ") || "موقع غير مسجّل"}
+              </div>
             </div>
-            <Pill tone="green" className="border-white/30 bg-white/20 text-white">
-              {window.start} → {window.end} · {toHours(window.capacityMin)} س
+            <Pill
+              tone={pumpRunning ? "green" : "gray"}
+              className="shrink-0 border-white/30 bg-white/20 text-white"
+            >
+              {pumpRunning ? "قيد التشغيل" : "بانتظار ديالة"}
             </Pill>
           </div>
-          <div className="mt-3 text-xs text-emerald-50">{isoToDisplay(stats.today)}</div>
-          <div className="text-xs text-emerald-100">{hijriDate(stats.today)}</div>
 
-          {stats.current ? (
-            <div className="mt-4">
-              <div className="text-xs text-emerald-50">اليوم الحالي</div>
-              <div className="flex items-end justify-between">
-                <div className="text-2xl font-black">
-                  {dialaDayLabel(state, stats.current)}
-                  {currentSummary ? ` · ${currentSummary.persons} شخص` : ""}
-                </div>
-                <div className="text-left text-xs">
-                  <div>{isoToShort(stats.current.date)}</div>
-                  <div className="text-base font-extrabold">
-                    {formatDuration(currentSummary?.plannedMin || 0)} / {toHours(window.capacityMin)} س
-                  </div>
-                </div>
+          {/* ثلاث حقائق ثابتة عن المضخة — خانات متساوية بدل سطر مزدحم */}
+          <div className="relative mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-2xl bg-white/10 px-2 py-2 ring-1 ring-white/10">
+              <div className="flex items-center justify-center gap-1 text-[clamp(0.55rem,2.2cqw,0.68rem)] font-bold text-sky-200">
+                <Timer size={11} /> وقت التشغيل
               </div>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  className="flex-1 bg-white/15 text-white"
-                  variant="ghost"
-                  onClick={() => onOpenDay(stats.current!.id)}
-                >
-                  <CalendarClock size={16} /> فتح اليوم الفعلي
-                </Button>
-                <Button
-                  className="flex-1 bg-white text-emerald-700"
-                  variant="ghost"
-                  onClick={() => onGoTab("diala")}
-                >
-                  <CalendarPlus size={16} /> ديالة جديدة
-                </Button>
+              <div className="mt-0.5 text-[clamp(0.68rem,2.9cqw,0.85rem)] font-extrabold">
+                {formatTimeRange(window.start, window.end)}
               </div>
             </div>
-          ) : (
-            <div className="mt-4">
-              <p className="text-sm text-emerald-50">لا يوجد يوم فعلي مسجّل بعد.</p>
-              <Button className="mt-3 bg-white text-emerald-700" variant="ghost" onClick={() => onGoTab("diala")}>
-                <CalendarPlus size={16} /> إضافة ديالة
-              </Button>
+            <div className="rounded-2xl bg-white/10 px-2 py-2 ring-1 ring-white/10">
+              <div className="flex items-center justify-center gap-1 text-[clamp(0.55rem,2.2cqw,0.68rem)] font-bold text-amber-200">
+                <Gauge size={11} /> ساعات اليوم
+              </div>
+              <div className="mt-0.5 text-[clamp(0.68rem,2.9cqw,0.85rem)] font-extrabold">
+                {toHours(window.capacityMin)} ساعة
+              </div>
             </div>
-          )}
+            <div className="rounded-2xl bg-white/10 px-2 py-2 ring-1 ring-white/10">
+              <div className="flex items-center justify-center gap-1 text-[clamp(0.55rem,2.2cqw,0.68rem)] font-bold text-violet-200">
+                <Users size={11} /> المساهمون
+              </div>
+              <div className="mt-0.5 text-[clamp(0.68rem,2.9cqw,0.85rem)] font-extrabold">
+                {stats.shareholders}
+              </div>
+            </div>
+          </div>
+
+          <div className="relative mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[clamp(0.6rem,2.4cqw,0.72rem)] font-bold text-sky-50/90">
+            <CalendarCheck size={13} className="shrink-0 text-cyan-200" />
+            <span>{isoToDisplay(stats.today)}</span>
+            <span className="text-white/40">•</span>
+            <span className="font-normal text-sky-100/70">{hijriDate(stats.today)}</span>
+          </div>
         </div>
+      </Card>
+
+      {/* يوم الديالة — بطاقة صغيرة مستقلة */}
+      <Card className="@container space-y-2 p-3" data-testid="dashboard-diala-day">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-[clamp(0.62rem,2.6cqw,0.75rem)] font-extrabold text-gray-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+            يوم الديالة
+          </span>
+          {stats.current ? (
+            <span className="text-[clamp(0.6rem,2.4cqw,0.72rem)] font-bold text-gray-400">
+              {isoToShort(stats.current.date)}
+            </span>
+          ) : null}
+        </div>
+
+        {stats.current ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-sm shadow-violet-600/25">
+              <span className="text-[9px] font-bold text-violet-100/90">اليوم</span>
+              <span className="text-[clamp(0.78rem,4cqw,1.05rem)] font-black leading-none">
+                {dayOrdinal(stats.currentNumber)}
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-[clamp(0.78rem,3.6cqw,1rem)] font-extrabold text-gray-800 dark:text-white">
+                  ديالة {stats.currentRound}
+                </span>
+                {currentSummary ? <Pill tone="violet">{currentSummary.persons} أشخاص</Pill> : null}
+              </div>
+              <div className="mt-0.5 truncate text-[clamp(0.62rem,2.6cqw,0.78rem)] text-gray-400">
+                {formatDuration(currentSummary?.plannedMin || 0)} من {toHours(window.capacityMin)} ساعة
+                تشغيل
+              </div>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700">
+                <div
+                  className="h-full rounded-full bg-gradient-to-l from-violet-500 to-indigo-500 transition-all"
+                  style={{ width: `${dayProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => onOpenDay(stats.current!.id)}
+              className="flex shrink-0 items-center gap-1 rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-900/40 dark:bg-indigo-900/25 dark:text-indigo-300"
+            >
+              <CalendarClock size={14} /> فتح
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+              <CalendarPlus size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[clamp(0.78rem,3.6cqw,1rem)] font-extrabold text-gray-800 dark:text-white">
+                لا يوجد يوم فعلي
+              </div>
+              <div className="mt-0.5 text-[clamp(0.62rem,2.6cqw,0.78rem)] text-gray-400">
+                أضف ديالة لتبدأ تسجيل الأيام
+              </div>
+            </div>
+            <button
+              onClick={() => onGoTab("diala")}
+              className="flex shrink-0 items-center gap-1 rounded-2xl border border-violet-100 bg-violet-50 px-3 py-2 text-[11px] font-bold text-violet-700 transition hover:bg-violet-100 dark:border-violet-900/40 dark:bg-violet-900/25 dark:text-violet-300"
+            >
+              <Layers size={14} /> إضافة ديالة
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* إجراءات سريعة */}
       <Card className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">إجراءات سريعة</h2>
-          <button className="text-xs font-bold text-emerald-600" onClick={() => onGoTab("reports")}>
-            عرض الكل
-          </button>
-        </div>
+        <SectionHeader
+          tone="indigo"
+          icon={<Plus size={16} />}
+          title="إجراءات سريعة"
+          action={() => onGoTab("reports")}
+          actionLabel="عرض الكل"
+        />
         <div className="flex gap-2 overflow-x-auto pb-1">
           {quickActions.map((a) => (
             <button
@@ -242,13 +440,18 @@ export default function Dashboard({
               aria-label={a.label}
               className={cx(
                 "flex min-w-[80px] flex-1 flex-col items-center gap-2 rounded-2xl border px-2 py-3 transition active:scale-[0.97]",
-                TONE_TILE[a.tone]
+                QUICK_TILE[a.tone].tile
               )}
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm dark:bg-slate-800">
+              <span
+                className={cx(
+                  "flex h-10 w-10 items-center justify-center rounded-xl",
+                  QUICK_TILE[a.tone].chip
+                )}
+              >
                 {a.icon}
               </span>
-              <span className="text-[11px] font-bold">{a.label}</span>
+              <span className="text-[11px] font-bold text-gray-600 dark:text-slate-200">{a.label}</span>
             </button>
           ))}
         </div>
@@ -256,28 +459,20 @@ export default function Dashboard({
 
       {/* أدوار اليوم */}
       <Card className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
-              أدوار اليوم — {pump.name}
-            </h2>
-            {stats.current ? (
-              <div className="text-[11px] text-gray-400">
-                {dialaDayLabel(state, stats.current)} · {isoToShort(stats.current.date)}
-                {currentSummary ? ` · ${currentSummary.persons} شخص` : ""}
-              </div>
-            ) : (
-              <div className="text-[11px] text-gray-400">لا يوجد يوم فعلي مسجّل</div>
-            )}
-          </div>
-          <button
-            className="text-xs font-bold text-emerald-600"
-            onClick={openActualDay}
-            aria-label="عرض كل الأدوار"
-          >
-            عرض الكل
-          </button>
-        </div>
+        <SectionHeader
+          tone="sky"
+          icon={<CalendarCheck size={16} />}
+          title={`أدوار اليوم — ${pump.name}`}
+          sub={
+            stats.current
+              ? `${dialaDayLabel(state, stats.current)} · ${isoToShort(stats.current.date)}${
+                  currentSummary ? ` · ${currentSummary.persons} شخص` : ""
+                }`
+              : "لا يوجد يوم فعلي مسجّل"
+          }
+          action={openActualDay}
+          actionLabel="عرض الكل"
+        />
 
         {!stats.current || stats.turns.length === 0 ? (
           <EmptyState
@@ -313,22 +508,23 @@ export default function Dashboard({
 
       {/* المضخات */}
       <Card className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">المضخات</h2>
-          <button className="text-xs font-bold text-emerald-600" onClick={() => onGoTab("settings")}>
-            إدارة المضخات
-          </button>
-        </div>
+        <SectionHeader
+          tone="teal"
+          icon={<Gauge size={16} />}
+          title="المضخات"
+          action={() => onGoTab("settings")}
+          actionLabel="إدارة المضخات"
+        />
         <button
           onClick={() => onGoTab("settings")}
-          className="flex w-full items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3 text-right dark:border-emerald-900/40 dark:bg-emerald-900/20"
+          className="flex w-full items-center gap-3 rounded-2xl border border-teal-100 bg-teal-50/60 p-3 text-right transition hover:border-teal-200 dark:border-teal-900/40 dark:bg-teal-900/20"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-sm shadow-teal-500/25">
             <Gauge size={20} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center justify-end gap-2">
-              <Pill tone={pumpRunning ? "green" : "gray"}>{pumpRunning ? "تعمل" : "بانتظار ديالة"}</Pill>
+              <Pill tone={pumpRunning ? "teal" : "gray"}>{pumpRunning ? "تعمل" : "بانتظار ديالة"}</Pill>
               <span className="text-sm font-extrabold text-gray-800 dark:text-white">{pump.name}</span>
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-gray-400">
@@ -342,11 +538,13 @@ export default function Dashboard({
 
       {stats.next ? (
         <Card className="flex items-center gap-3 p-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-900/30">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-sm shadow-cyan-500/25">
             <CalendarClock size={18} />
           </div>
           <div className="flex-1">
-            <div className="text-xs font-bold text-gray-400">اليوم القادم</div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" /> اليوم القادم
+            </div>
             <div className="text-sm font-extrabold text-gray-800 dark:text-white">
               {dialaDayLabel(state, stats.next)} — {isoToShort(stats.next.date)}
             </div>
@@ -394,13 +592,14 @@ export default function Dashboard({
           label="ساعات الاستخدام المسجلة"
           value={formatDuration(stats.usageMin)}
           hint={`${state.usages.filter((u) => u.status === "active").length} عملية استخدام`}
+          tone="blue"
           icon={<Timer size={14} />}
         />
         <StatCard
           label="ساعات تشغيل المضخة"
           value={formatDuration(stats.runMin)}
           hint={`استهلاك ${stats.financials.fuelLiters} لتر`}
-          tone="blue"
+          tone="teal"
           icon={<Droplets size={14} />}
         />
         <StatCard
@@ -408,7 +607,7 @@ export default function Dashboard({
           value={`${stats.shareholders}`}
           hint={`${formatNumber(stats.units)} ${pump.shareUnit}`}
           icon={<Users size={14} />}
-          tone="gray"
+          tone="violet"
         />
         <StatCard
           label="ساعات التوقف"
@@ -420,29 +619,29 @@ export default function Dashboard({
       </div>
 
       <Card className="p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Coins size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">ملخص الحسابات</h2>
-          <button className="mr-auto text-xs font-bold text-emerald-600" onClick={() => onGoTab("finance")}>
-            التفاصيل
-          </button>
-        </div>
+        <SectionHeader
+          tone="amber"
+          icon={<Coins size={16} />}
+          title="ملخص الحسابات"
+          action={() => onGoTab("finance")}
+          actionLabel="التفاصيل"
+        />
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-2xl bg-gray-50 px-2 py-3 dark:bg-slate-700">
-            <div className="text-[10px] font-bold text-gray-400">إجمالي الاستحقاق</div>
-            <div className="mt-1 text-sm font-extrabold text-gray-800 dark:text-white">
+          <div className="rounded-2xl bg-sky-50 px-2 py-3 dark:bg-sky-900/25">
+            <div className="text-[10px] font-bold text-sky-600 dark:text-sky-300">إجمالي الاستحقاق</div>
+            <div className="mt-1 text-sm font-extrabold text-sky-800 dark:text-sky-200">
               {formatMoney(stats.financials.charging, pump.currency)}
             </div>
           </div>
-          <div className="rounded-2xl bg-emerald-50 px-2 py-3 dark:bg-emerald-900/30">
-            <div className="text-[10px] font-bold text-emerald-600">المسدَّد</div>
+          <div className="rounded-2xl bg-emerald-50 px-2 py-3 dark:bg-emerald-900/25">
+            <div className="text-[10px] font-bold text-sky-600 dark:text-sky-300">المسدَّد</div>
             <div className="mt-1 text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
               {formatMoney(stats.financials.collected, pump.currency)}
             </div>
           </div>
-          <div className="rounded-2xl bg-amber-50 px-2 py-3 dark:bg-amber-900/30">
-            <div className="text-[10px] font-bold text-amber-600">المتبقي</div>
-            <div className="mt-1 text-sm font-extrabold text-amber-700 dark:text-amber-300">
+          <div className="rounded-2xl bg-rose-50 px-2 py-3 dark:bg-rose-900/25">
+            <div className="text-[10px] font-bold text-rose-600 dark:text-rose-300">المتبقي</div>
+            <div className="mt-1 text-sm font-extrabold text-rose-700 dark:text-rose-300">
               {formatMoney(stats.financials.outstanding, pump.currency)}
             </div>
           </div>
@@ -455,13 +654,13 @@ export default function Dashboard({
       </Card>
 
       <Card className="p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Layers size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">الجدول الأساسي (مرجعي)</h2>
-          <button className="mr-auto text-xs font-bold text-emerald-600" onClick={() => onGoTab("people")}>
-            إدارة
-          </button>
-        </div>
+        <SectionHeader
+          tone="violet"
+          icon={<Layers size={16} />}
+          title="الجدول الأساسي (مرجعي)"
+          action={() => onGoTab("people")}
+          actionLabel="إدارة"
+        />
         {stats.schedule.length === 0 ? (
           <EmptyState
             icon={<Users size={24} />}
@@ -478,9 +677,9 @@ export default function Dashboard({
             {stats.schedule.slice(0, 6).map((row) => (
               <div
                 key={row.shareholder.id}
-                className="flex items-center gap-3 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-slate-700"
+                className="flex items-center gap-3 rounded-2xl bg-violet-50/60 px-3 py-2 dark:bg-slate-700"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[11px] font-black text-emerald-700 dark:bg-slate-800">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-[11px] font-black text-white">
                   {row.order + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -506,13 +705,13 @@ export default function Dashboard({
       </Card>
 
       <Card className="p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <TrendingUp size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">آخر الأيام الفعلية</h2>
-          <button className="mr-auto text-xs font-bold text-emerald-600" onClick={() => onGoTab("diala")}>
-            الكل
-          </button>
-        </div>
+        <SectionHeader
+          tone="orange"
+          icon={<TrendingUp size={16} />}
+          title="آخر الأيام الفعلية"
+          action={() => onGoTab("diala")}
+          actionLabel="الكل"
+        />
         {stats.days.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">لا توجد أيام مسجّلة.</p>
         ) : (
@@ -531,7 +730,7 @@ export default function Dashboard({
                   <button
                     key={day.id}
                     onClick={() => onOpenDay(day.id)}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-gray-100 px-3 py-3 text-right hover:border-emerald-200 dark:border-slate-700"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-gray-100 px-3 py-3 text-right transition hover:border-orange-200 hover:bg-orange-50/40 dark:border-slate-700 dark:hover:border-orange-900/40"
                   >
                     <div className="flex-1">
                       <div className="text-xs font-extrabold text-gray-800 dark:text-white">
@@ -557,68 +756,8 @@ export default function Dashboard({
 
 /* ------------------------ بطاقة دور (المستخدم) ------------------------ */
 
-export interface TurnRow {
-  entryId: string;
-  name: string;
-  units: number;
-  hours: number;
-  startTime: string;
-  endTime: string;
-  usedMin: number;
-  plannedMin: number;
-  remainingMin: number;
-  shortageLiters: number;
-  tone: "green" | "blue" | "gray";
-  label: string;
-}
-
-function buildTurns(state: AppState, day: DialaDay | null, pumpId: string): TurnRow[] {
-  if (!day) return [];
-  const entries: DayEntry[] = dayEntries(state, day.id)
-    .slice()
-    .sort((a, b) => a.orderIndex - b.orderIndex);
-  const dayUsages = state.usages.filter((u) => u.dayId === day.id && u.status === "active");
-  const closed = day.status === "closed" || day.status === "completed";
-
-  return entries.map((entry) => {
-    const personId = entry.actualPersonId ?? entry.personId;
-    const usage =
-      dayUsages.find((u) => u.entryId === entry.id) ??
-      dayUsages.find((u) => !u.entryId && u.personId === personId) ??
-      null;
-    const shareholder = shareholderOfPerson(state, pumpId, entry.personId);
-    const usedMin = usage?.minutes ?? 0;
-    const plannedMin = entry.plannedMin || 0;
-    const remainingMin = Math.max(0, plannedMin - usedMin);
-    const shortageLiters = usage
-      ? Math.max(0, usage.dieselShortageLiters || 0)
-      : dayUsages
-          .filter((u) => u.personId === personId)
-          .reduce((s, u) => s + Math.max(0, u.dieselShortageLiters || 0), 0);
-    const pill = usage
-      ? remainingMin > 0
-        ? { tone: "green" as const, label: "جارٍ الآن" }
-        : { tone: "green" as const, label: "تم الدور" }
-      : closed
-        ? { tone: "gray" as const, label: "لم يُسجَّل" }
-        : { tone: "blue" as const, label: "اليوم" };
-
-    return {
-      entryId: entry.id,
-      name: personName(state, personId),
-      units: shareholder?.units ?? 1,
-      hours: toHours(plannedMin),
-      startTime: entry.startTime,
-      endTime: entry.endTime,
-      usedMin,
-      plannedMin,
-      remainingMin,
-      shortageLiters,
-      tone: pill.tone,
-      label: pill.label,
-    };
-  });
-}
+/** صفوف الأدوار تُحسب في طبقة القواعد — هذا اسم مختصر للاستخدام في العرض */
+export type TurnRow = DayTurnRow;
 
 function TurnCard({ turn, index, onOpen }: { turn: TurnRow; index: number; onOpen: () => void }) {
   const pct = turn.plannedMin > 0 ? Math.min(100, Math.round((turn.usedMin / turn.plannedMin) * 100)) : 0;
@@ -655,8 +794,8 @@ function TurnCard({ turn, index, onOpen }: { turn: TurnRow; index: number; onOpe
         <span>
           {turn.units} سهم · {turn.hours} س
         </span>
-        <span dir="ltr" className="text-gray-400">
-          {turn.startTime} – {turn.endTime}
+        <span className="text-gray-400">
+          {formatTimeRange(turn.startTime, turn.endTime)}
         </span>
       </div>
 
@@ -676,23 +815,4 @@ function TurnCard({ turn, index, onOpen }: { turn: TurnRow; index: number; onOpe
       ) : null}
     </button>
   );
-}
-
-export function DayStatusPill({ status }: { status: string }) {
-  const map: Record<string, { tone: "green" | "amber" | "blue" | "gray" | "red"; label: string }> = {
-    scheduled: { tone: "gray", label: "مجدول" },
-    draft: { tone: "amber", label: "مسودة" },
-    in_progress: { tone: "blue", label: "جارٍ التنفيذ" },
-    completed: { tone: "green", label: "مكتمل" },
-    closed: { tone: "green", label: "مغلق" },
-    revised: { tone: "amber", label: "معدّل" },
-  };
-  const item = map[status] ?? { tone: "gray" as const, label: status };
-  return <Pill tone={item.tone}>{item.label}</Pill>;
-}
-
-export function dayOwnerLabel(state: AppState, entryId: string): string {
-  const entry = state.entries.find((e) => e.id === entryId);
-  if (!entry) return "—";
-  return personName(state, entry.actualPersonId ?? entry.personId);
 }

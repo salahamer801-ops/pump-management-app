@@ -126,7 +126,7 @@ export default function AccountsScreen() {
       <Card className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-extrabold text-gray-700">
-            <Wallet size={16} className="text-emerald-600" /> صافي السلفة
+            <Wallet size={16} className="text-sky-600 dark:text-sky-300" /> صافي السلفة
           </div>
           <div className={`text-lg font-black ${netBorrowed > 0 ? "text-red-600" : "text-emerald-700"}`}>
             {netBorrowed > 0

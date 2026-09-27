@@ -18,7 +18,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/icon-192.png", "icons/icon-512.png"],
+      includeAssets: [
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+        "icons/apple-touch-icon.png",
+        "brand/app-icon.webp",
+      ],
       manifest: {
         name: "مشروع تنظيم المضخات",
         short_name: "تنظيم المضخات",
@@ -29,8 +34,8 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
-        background_color: "#f0fdf4",
-        theme_color: "#059669",
+        background_color: "#032a4c",
+        theme_color: "#032a4c",
         icons: [
           {
             src: "icons/icon-192.png",

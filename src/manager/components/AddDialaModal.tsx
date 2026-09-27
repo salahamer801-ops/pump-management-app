@@ -111,7 +111,7 @@ export function AddDialaModal({
         </div>
 
         <div className="rounded-2xl bg-emerald-50 px-3 py-3 dark:bg-emerald-900/30">
-          <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300">
+          <div className="text-[11px] font-bold text-sky-600 dark:text-sky-300">
             تاريخ نهاية الديالة (محسوب)
           </div>
           <div className="mt-0.5 text-base font-black text-emerald-800 dark:text-emerald-200">
@@ -138,7 +138,7 @@ export function AddDialaModal({
             type="checkbox"
             checked={lockIt}
             onChange={(e) => setLockIt(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-emerald-600"
+            className="mt-0.5 h-4 w-4 accent-sky-600"
             aria-label="حفظ الديالة بعد الإنشاء"
           />
           <span className="text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">

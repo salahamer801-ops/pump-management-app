@@ -7,6 +7,7 @@ import { durationMin } from "../domain/util";
 import { generateId, generatePumpCode } from "../lib/ids";
 import { useAuth } from "../auth/AuthProvider";
 import { Button, Card, Field, NumberInput, Select, TextArea, TextInput, TimeInput } from "../components/ui";
+import { BrandLogo } from "../components/Brand";
 
 /** إنشاء المضخة — بيانات مرجعية تُستخدم في كل الحسابات لاحقًا (§20) */
 export default function PumpSetup({
@@ -86,8 +87,8 @@ export default function PumpSetup({
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
       <div className="mb-5 text-center">
-        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-600/25">
-          <Droplets size={30} />
+        <div className="mx-auto mb-3 flex justify-center">
+          <BrandLogo size={68} rounded="rounded-3xl" />
         </div>
         <h1 className="text-2xl font-black text-gray-900 dark:text-white">تسجيل المضخة</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
@@ -144,7 +145,7 @@ export default function PumpSetup({
 
         <Card className="space-y-3 p-4">
           <h2 className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-            <Fuel size={16} className="text-emerald-600" /> الديزل
+            <Fuel size={16} className="text-sky-600 dark:text-sky-300" /> الديزل
           </h2>
           <div className="grid grid-cols-2 gap-3">
             <Field label="الاستهلاك (لتر/ساعة)">
@@ -161,7 +162,7 @@ export default function PumpSetup({
 
         <Card className="space-y-3 p-4">
           <h2 className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-            <Tractor size={16} className="text-emerald-600" /> الرواسة
+            <Tractor size={16} className="text-sky-600 dark:text-sky-300" /> الرواسة
           </h2>
           <Field label="اسم الرواس">
             <TextInput value={form.operatorName} onChange={(e) => set("operatorName", e.target.value)} />
@@ -184,7 +185,7 @@ export default function PumpSetup({
               type="checkbox"
               checked={form.royaltyEnabled}
               onChange={(e) => set("royaltyEnabled", e.target.checked)}
-              className="h-5 w-5 accent-emerald-600"
+              className="h-5 w-5 accent-sky-600"
             />
           </label>
           {form.royaltyEnabled ? (
@@ -210,7 +211,7 @@ export default function PumpSetup({
 
         <Card className="space-y-3 p-4">
           <h2 className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-            <Sprout size={16} className="text-emerald-600" /> وحدات الحصص
+            <Sprout size={16} className="text-sky-600 dark:text-sky-300" /> وحدات الحصص
           </h2>
           <Field label="اسم وحدة الحصة" hint="مثال: حصة، سهم، ساعة">
             <TextInput value={form.shareUnit} onChange={(e) => set("shareUnit", e.target.value)} />
@@ -228,7 +229,7 @@ export default function PumpSetup({
         </Button>
         <button
           onClick={() => actions.seedDemo()}
-          className="mx-auto flex items-center gap-2 text-xs font-bold text-emerald-600"
+          className="mx-auto flex items-center gap-2 text-xs font-bold text-sky-600 dark:text-sky-300"
         >
           <Sun size={14} /> تحميل بيانات تجريبية للاستعراض
         </button>

@@ -60,3 +60,5 @@ export function todayLabel(): string {
     day: "numeric",
   });
 }
+
+export { formatTimeAmPm } from "./domain/util";

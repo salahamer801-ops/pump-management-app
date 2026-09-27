@@ -24,6 +24,7 @@ import {
   shareholderUseStatus,
   useStatusLabel,
   useStatusTone,
+  txSignedAmount,
 } from "../../domain/rules";
 import { formatNumber } from "../../format";
 import { isoToShort, todayISO, uid } from "../../domain/util";
@@ -293,7 +294,7 @@ function PersonDetail({
   const usages = state.usages.filter((u) => u.personId === person.id && u.status === "active");
   const balance = state.transactions
     .filter((t) => t.personId === person.id && t.status === "posted")
-    .reduce((s, t) => s + (t.direction === "debit" ? t.amount : -t.amount), 0);
+    .reduce((s, t) => s + txSignedAmount(t), 0);
 
   return (
     <Modal open onClose={onClose} title={person.name}>
@@ -337,7 +338,7 @@ function PersonDetail({
         {shareholder ? (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/20">
             <div className="flex items-center gap-2">
-              <Coins size={15} className="text-emerald-600" />
+              <Coins size={15} className="text-sky-600 dark:text-sky-300" />
               <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300">
                 المساهم الأساسي (سجل مرجعي ثابت)
               </span>
@@ -385,7 +386,7 @@ function PersonDetail({
               </button>
               <button
                 onClick={() => setRightModal(true)}
-                className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+                className="rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
               >
                 <ArrowLeftRight size={12} className="inline -mt-0.5" /> عملية حق جديدة
               </button>
@@ -411,7 +412,7 @@ function PersonDetail({
         {shareholder ? (
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <History size={14} className="text-emerald-600" />
+              <History size={14} className="text-sky-600 dark:text-sky-300" />
               <span className="text-xs font-extrabold text-gray-700 dark:text-slate-200">
                 تاريخ الحقوق والتحويلات
               </span>
@@ -435,7 +436,7 @@ function PersonDetail({
                           {RIGHT_KINDS.find((k) => k.id === r.kind)?.label ?? r.kind}
                         </Pill>
                         <span className="font-bold text-gray-700 dark:text-slate-200">
-                          {personName(state, r.fromPersonId)} → {personName(state, r.holderPersonId)}
+                          {personName(state, r.holderPersonId)} ← {personName(state, r.fromPersonId)}
                         </span>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-gray-400">
@@ -605,8 +606,8 @@ function RightModal({ shareholder, onClose }: { shareholder: Shareholder; onClos
 
         <div className="rounded-2xl bg-gray-50 px-3 py-2 text-[11px] dark:bg-slate-700">
           <div className="font-bold text-gray-600 dark:text-slate-200">
-            السلسلة: {existing ? personName(state, existing.holderPersonId) : personName(state, shareholder.personId)} →{" "}
-            {personName(state, holderId)}
+            السلسلة: {personName(state, holderId)} ←{" "}
+            {existing ? personName(state, existing.holderPersonId) : personName(state, shareholder.personId)}
           </div>
           <div className="mt-1 text-gray-400">
             المساهم الأساسي يبقى {personName(state, shareholder.personId)} — لا يُستبدل السجل القديم.
@@ -651,7 +652,7 @@ function RightModal({ shareholder, onClose }: { shareholder: Shareholder; onClos
               type="checkbox"
               checked={endPrevious}
               onChange={(e) => setEndPrevious(e.target.checked)}
-              className="h-5 w-5 accent-emerald-600"
+              className="h-5 w-5 accent-sky-600"
             />
           </label>
         ) : null}

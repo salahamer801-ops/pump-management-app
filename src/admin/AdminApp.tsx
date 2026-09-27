@@ -7,12 +7,12 @@ import {
   LogOut,
   ScrollText,
   Settings2,
-  ShieldCheck,
   Users,
   UserCheck,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { cx } from "../components/ui";
+import { BrandLogo } from "../components/Brand";
 import OverviewScreen from "./screens/OverviewScreen";
 import UsersScreen from "./screens/UsersScreen";
 import PumpsScreen from "./screens/PumpsScreen";
@@ -41,9 +41,7 @@ export default function AdminApp({ onExit }: { onExit?: () => void }) {
       {/* الرأس */}
       <header className="sticky top-0 z-20 border-b border-emerald-700/20 bg-gradient-to-l from-emerald-700 via-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/10">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-            <ShieldCheck size={20} />
-          </span>
+          <BrandLogo size={40} decorativeBg />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-sm font-black leading-tight">
               لوحة تحكم مسؤول النظام

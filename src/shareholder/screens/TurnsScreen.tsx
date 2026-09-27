@@ -25,7 +25,7 @@ import {
   timeToMinutes,
   uid,
 } from "../calc";
-import { formatDateShort, formatLiters, formatMoneyYER, formatNumber, formatTimeAmPm } from "../format";
+import { formatDateShort, formatLiters, formatMoneyFor, formatMoneyYER, formatNumber, formatTimeAmPm, formatTimeRange } from "../format";
 import type { LendDirection, LendUnit, ShareholderTurn } from "../types";
 import {
   Button,
@@ -217,7 +217,7 @@ export default function TurnsScreen() {
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <Pill tone="blue">
                       <Fuel size={11} /> {formatLiters(turn.dieselLiters)} ={" "}
-                      {formatMoneyYER(turn.dieselCost)}
+                      {formatMoneyFor(turn.dieselCost, p)}
                     </Pill>
                     {turn.direction && (
                       <Pill tone={turn.direction === "borrow" ? "red" : "amber"}>
@@ -227,7 +227,7 @@ export default function TurnsScreen() {
                           <ArrowUpRight size={11} />
                         )}
                         {turn.direction === "borrow" ? "تسلفت" : "سلفت"}{" "}
-                        {formatMoneyYER(turn.lendCost)}
+                        {formatMoneyFor(turn.lendCost, p)}
                       </Pill>
                     )}
                     <Pill tone={turn.royaltyPaid ? "green" : "amber"}>
@@ -238,7 +238,7 @@ export default function TurnsScreen() {
                 <div className="flex flex-col gap-1">
                   <button
                     onClick={() => openEdit(turn)}
-                    className="rounded-lg px-2 py-1 text-xs font-bold text-emerald-600 hover:bg-emerald-50"
+                    className="rounded-lg px-2 py-1 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-900/30"
                   >
                     تعديل
                   </button>
@@ -403,7 +403,7 @@ export default function TurnsScreen() {
         {removeTurn ? (
           <div className="space-y-4">
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-              سيُخفى دور <b>{removeTurn.date}</b> ({removeTurn.startTime} → {removeTurn.endTime} ·{" "}
+              سيُخفى دور <b>{removeTurn.date}</b> ({formatTimeRange(removeTurn.startTime, removeTurn.endTime)} ·{" "}
               {removeTurn.hours} ساعة) من قوائمك، لكن <b>السجل يبقى محفوظًا</b> مع سبب الإزالة ووقته — لا يُحذف
               أي سجل نهائيًا.
             </p>

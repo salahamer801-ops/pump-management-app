@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   CalendarPlus,
   CheckCircle2,
   ChevronLeft,
@@ -18,7 +16,6 @@ import {
   Phone,
   PlayCircle,
   Plus,
-  RefreshCcw,
   ShieldCheck,
   Trash2,
   UserCheck,
@@ -43,6 +40,8 @@ import type {
 import {
   DIESEL_SETTLEMENT_OPTIONS,
   ROYALTY_MODE_OPTIONS,
+  dayTimeline,
+  type DayTimeline,
   capacityBreakdown,
   computeUsageDraft,
   currentRight,
@@ -54,19 +53,24 @@ import {
   daySummary,
   dialaDayLabel,
   dialaDayTitle,
+  dieselPaidPartOf,
   dieselSettlementLabel,
   entryMinutes,
   findPerson,
   openIssues,
-  overlapsFor,
+  scheduleConflicts,
+  txSignedAmount,
+  sortedEntriesByTime,
   personName,
   pumpWindow,
   royaltyModeLabel,
   roundDates,
   roundForDate,
   roundOfDay,
-  baseRosterRows,
   isBaseRosterPerson,
+  royaltyCashPartOf,
+  royaltyDeferredPartOf,
+  shortfallReasonLabel,
   shareholderOfPerson,
   shortageAmountOf,
   stoppageMinutesInRange,
@@ -77,14 +81,17 @@ import {
   durationMin,
   formatClock,
   formatDuration,
+  formatTimeAmPm,
+  formatTimeRange,
+  isoToDayMonth,
   isoToDisplay,
   isoToShort,
   isOvernight,
   minutesToTime,
   nowTime,
   timeToMinutes,
-  toHours,
   todayISO,
+  toHours,
   uid,
 } from "../../domain/util";
 import { formatMoney, formatNumber } from "../../format";
@@ -93,6 +100,8 @@ import {
   Card,
   EmptyState,
   Field,
+  MiniRow,
+  MiniStat,
   Modal,
   NumberInput,
   Pill,
@@ -103,10 +112,15 @@ import {
   cx,
 } from "../../components/ui";
 import PersonPicker, { roleLabel } from "../../components/PersonPicker";
-import ShareholdersPanel from "../components/ShareholdersPanel";
 import DayBaseShiftCard from "../components/DayBaseShiftCard";
+import ParticipantModal from "../components/ParticipantModal";
+import SettlementEditor, {
+  settlementAmounts,
+  settlementFromUsage,
+  type SettlementDraft,
+} from "../components/SettlementEditor";
 import { AddDialaButton } from "../components/AddDialaModal";
-import { DayStatusPill } from "./Dashboard";
+import { DayStatusPill } from "../../components/StatusPills";
 
 const STATUS_FLOW: { id: DayStatus; label: string }[] = [
   { id: "scheduled", label: "مجدول" },
@@ -119,9 +133,12 @@ const STATUS_FLOW: { id: DayStatus; label: string }[] = [
 export default function ActualDayScreen({
   dayId,
   onChangeDay,
+  onOpenDiala,
 }: {
   dayId: string | null;
   onChangeDay: (id: string | null) => void;
+  /** الانتقال إلى شاشة الديالات — إدارة كشف مساهمي الديالة هناك فقط */
+  onOpenDiala?: () => void;
 }) {
   const { state, actions } = useApp();
   const pump = state.pump!;
@@ -150,7 +167,6 @@ export default function ActualDayScreen({
 
   const day = useMemo(() => dayByDate(state, date), [state, date]);
   const entries = useMemo(() => (day ? dayEntries(state, day.id) : []), [state, day]);
-  const window = pumpWindow(pump, day);
   const summary = day ? daySummary(state, day, pump) : null;
   const issues = day ? openIssues(state, day, pump) : [];
   const allIssues = day ? dayIssues(state, day, pump) : [];
@@ -177,6 +193,14 @@ export default function ActualDayScreen({
     );
   }, [state.usages, entries, day]);
 
+  /** شريط اليوم الزمني: النافذة · الموزَّع · المتبقي · الفراغ القادم */
+  const timeline = useMemo(
+    () => (day ? dayTimeline(state, day, pump) : null),
+    [state, day, pump]
+  );
+  /** صفوف المشاركين بترتيب زمني إلزامي (لا ترتيب يدوي) */
+  const sortedEntries = useMemo(() => sortedEntriesByTime(entries), [entries]);
+
   const changeDate = (next: string) => {
     setDate(next);
     const target = dayByDate(state, next);
@@ -185,11 +209,6 @@ export default function ActualDayScreen({
 
   /** الديالة التي يقع فيها التاريخ المختار — لا يوجد يوم خارج الديالة */
   const dialaForDate = useMemo(() => roundForDate(state, date), [state, date]);
-  /** أسطر كشف الدوام الأساسي لديالة هذا اليوم — للزر وللشارات */
-  const baseRows = useMemo(
-    () => baseRosterRows(state, day?.roundId ?? dialaForDate?.id ?? null),
-    [state, day?.roundId, dialaForDate?.id]
-  );
   const dialaDayIndex = dialaForDate
     ? roundDates(dialaForDate.startDate, dialaForDate.days).indexOf(date) + 1
     : 0;
@@ -232,7 +251,12 @@ export default function ActualDayScreen({
   if (!day) {
     return (
       <div className="space-y-4">
-        <DaySelector date={date} onChange={changeDate} />
+        <DaySelector
+          date={date}
+          onChange={changeDate}
+          dayIndex={dialaDayIndex}
+          dialaNumber={dialaForDate?.number ?? null}
+        />
         <DialaStrip date={date} onOpenDay={onChangeDay} />
 
         {dialaForDate ? (
@@ -262,14 +286,18 @@ export default function ActualDayScreen({
             }
           />
         )}
-        <ShareholdersPanel dayId={null} actor={actorName} />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <DaySelector date={date} onChange={changeDate} />
+      <DaySelector
+        date={date}
+        onChange={changeDate}
+        dayIndex={dialaDayIndex}
+        dialaNumber={dialaForDate?.number ?? day.dialaNumber ?? null}
+      />
       <DialaStrip date={date} dayId={day.id} onOpenDay={onChangeDay} />
 
       <Card className="p-4">
@@ -310,7 +338,7 @@ export default function ActualDayScreen({
           <MiniStat label="الأشخاص" value={`${summary?.persons ?? 0}`} />
           <MiniStat label="ساعات اليوم" value={formatDuration(summary?.plannedMin ?? 0)} />
           <MiniStat
-            label={summary && summary.overMin > 0 ? "تجاوز" : "متبقٍ"}
+            label={summary && summary.overMin > 0 ? "تجاوز" : "المتاح فعليًا"}
             value={formatDuration(summary && summary.overMin > 0 ? summary.overMin : summary?.remainingMin ?? 0)}
             tone={summary && summary.overMin > 0 ? "red" : "green"}
           />
@@ -320,6 +348,13 @@ export default function ActualDayScreen({
             tone={issues.length > 0 ? "amber" : "green"}
           />
         </div>
+
+        {summary && summary.plannedCapacityMin !== summary.capacityMin ? (
+          <p className="mt-2 text-[10px] text-gray-400">
+            طاقة اليوم وقت إنشائه: {formatDuration(summary.plannedCapacityMin)} — ونافذة التشغيل الحالية{" "}
+            {formatDuration(summary.capacityMin)} (التغيير يخصّ الحساب الجاري فقط).
+          </p>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {STATUS_FLOW.filter((s) => s.id !== "closed").map((s) => (
@@ -361,7 +396,7 @@ export default function ActualDayScreen({
       {breakdown ? (
         <Card className="p-4" data-testid="hours-breakdown">
           <div className="mb-2 flex items-center gap-2">
-            <ClipboardList size={16} className="text-emerald-600" />
+            <ClipboardList size={16} className="text-sky-600 dark:text-sky-300" />
             <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">تفصيل الساعات</h2>
             <Pill tone={breakdown.over ? "red" : "green"}>
               {breakdown.over ? `تجاوز ${formatDuration(breakdown.overMin)}` : "داخل الحد"}
@@ -434,11 +469,8 @@ export default function ActualDayScreen({
         </Card>
       ) : null}
 
-      {/* 1) المساهمون الأساسيون — سجل مرجعي ثابت لا يتغيّر بتغيّر اليوم */}
-      <ShareholdersPanel dayId={day.id} actor={actorName} />
-
-      {/* 2) الدوام الأساسي — كشف الديالة: أسماء المساهمين ونصيب كل واحد في هذا الدور */}
-      <DayBaseShiftCard day={day} actor={actorName} />
+      {/* 1) مساهمو ديالة هذا اليوم — عرض مرجعي فقط، والإدارة في شاشة الديالات */}
+      <DayBaseShiftCard day={day} onManageList={onOpenDiala} />
 
       {issues.length > 0 ? (
         <Card className="space-y-2 p-4">
@@ -477,34 +509,34 @@ export default function ActualDayScreen({
         </Card>
       ) : null}
 
-      {/* 3) الدوام الفعلي: من أخذ ماءه أو قاسم أسهم هذا اليوم */}
-      <Card className="p-4">
+      {/* 2) الدوام الفعلي: إدخال المشاركين خطوة بخطوة بترتيب زمني إلزامي */}
+      <Card className="p-4" data-testid="day-shift-section">
         <div className="mb-3 flex items-center gap-2">
-          <Users size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
-            الدوام الفعلي — من أخذ ماءه أو قاسم أسهم هذا اليوم
-          </h2>
-          <span className="mr-auto text-[11px] text-gray-400">
-            {entries.length} مستخدم · {formatDuration(summary?.plannedMin ?? 0)} من {toHours(window.capacityMin)} ساعة
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300">
+            <Users size={16} />
           </span>
+          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
+            الدوام الفعلي — من أخذ ماءه في هذا اليوم
+          </h2>
+          <span className="mr-auto text-[11px] text-gray-400">{entries.length} مشارك</span>
         </div>
+
+        {timeline ? <ShiftTimelineBar timeline={timeline} /> : null}
 
         {settle ? <SettlementSummary totals={settle} currency={pump.currency} /> : null}
 
         {entries.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
-            لا يوجد أحد في الدوام الفعلي لهذا اليوم بعد — ابدأ من كشف الديالة أو أضف من أخذ ماءه فعلًا.
+            لا يوجد مشارك في دوام هذا اليوم بعد — أضف المشارك الأول من نافذة «إضافة مشارك في دوام اليوم».
           </p>
         ) : (
           <div className="mt-3 space-y-2">
-            {entries.map((entry, index) => (
+            {sortedEntries.map((entry, index) => (
               <EntryRow
                 key={entry.id}
                 index={index}
                 entry={entry}
                 fromBaseRoster={isBaseRosterPerson(state, day.roundId ?? null, entry.personId)}
-                isFirst={index === 0}
-                isLast={index === entries.length - 1}
                 onEdit={() => setEditEntry(entry)}
                 onUsage={() => setUsageEntry(entry)}
                 onEditPerson={() => {
@@ -530,7 +562,9 @@ export default function ActualDayScreen({
                   <span className="font-extrabold text-gray-800 dark:text-white">
                     {personName(state, u.personId)}
                   </span>
-                  <Pill tone="gray">{u.startTime} → {u.endTime}</Pill>
+                  <Pill tone="gray">
+                    {formatTimeRange(u.startTime, u.endTime)}
+                  </Pill>
                   <Pill tone="blue">{formatDuration(u.minutes)}</Pill>
                   <Pill tone={u.dieselSettlement === "paid" ? "green" : u.dieselSettlement === "shortage" ? "amber" : "red"}>
                     ديزل: {dieselSettlementLabel(u.dieselSettlement)}
@@ -551,30 +585,20 @@ export default function ActualDayScreen({
           </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button className="flex-1" onClick={() => setPickerOpen(true)}>
-            <Plus size={18} /> إضافة شخص للدوام الفعلي
+        <div className="mt-3">
+          <Button className="w-full" onClick={() => setPickerOpen(true)} data-testid="day-add-participant">
+            <Plus size={18} /> إضافة مشارك في دوام اليوم
           </Button>
-          {baseRows.length > 0 ? (
-            <Button
-              variant="secondary"
-              onClick={() => actions.applyBaseRosterToDay(day.id, { actor: actorName })}
-              title="ملء الدوام الفعلي من كشف الديالة بنفس الترتيب والنصيب"
-              data-testid="day-start-from-base"
-            >
-              <RefreshCcw size={16} /> ابدأ من كشف الديالة ({baseRows.length})
-            </Button>
-          ) : null}
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-          «الدوام الفعلي» يُعدَّل بحرية: من أخذ ماءه أو قاسم أسهم هذا اليوم — تقديم/تأخير نصيب، إضافة ضيف، بيع أو سلفة
-          أو غيرها. التعديل لا يغيّر «كشف الدوام الأساسي» ولا أي يوم آخر، وكل خيار تسديد يُسجَّل كحركة مالية وسجل تدقيق.
+          يُدخل المشارك بخطوة واحدة: الاسم ثم الوقت من … إلى … بالترتيب الزمني، مع الديزل والرواسة وسبب النقص عند وجوده.
+          الترتيب إلزامي: لا تداخل ولا خروج عن نافذة تشغيل اليوم. وهذا لا يغيّر كشف الديالة ولا أي يوم آخر.
         </p>
       </Card>
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Wrench size={16} className="text-emerald-600" />
+          <Wrench size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">التوقفات</h2>
           <button
             onClick={() => setStoppageOpen(true)}
@@ -593,7 +617,8 @@ export default function ActualDayScreen({
                 className="flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
               >
                 <span className="flex-1">
-                  {s.reason || stoppageLabel(s.kind)} · {s.startTime} → {s.endTime} ({formatDuration(s.minutes)})
+                  {s.reason || stoppageLabel(s.kind)} · {formatTimeRange(s.startTime, s.endTime)} (
+                  {formatDuration(s.minutes)})
                 </span>
                 <button
                   onClick={() =>
@@ -619,41 +644,14 @@ export default function ActualDayScreen({
         </p>
       ) : null}
 
-      <PersonPicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        pumpId={pump.id}
-        title="إضافة مستخدم إلى اليوم الفعلي"
-        onSelect={(person, role) => {
-          const last = entries[entries.length - 1];
-          const startMin = last ? timeToMinutes(last.endTime) : timeToMinutes(day.workStart);
-          const shareholder = shareholderOfPerson(state, pump.id, person.id);
-          const fallbackMin = shareholder?.baseHoursMin || 60;
-          const entry: DayEntry = {
-            id: uid("en"),
-            dayId: day.id,
-            pumpId: pump.id,
-            orderIndex: entries.length,
-            personId: person.id,
-            role: role as EntryRole,
-            shareholderId: shareholder?.id ?? null,
-            rightId: null,
-            startTime: minutesToTime(startMin),
-            endTime: minutesToTime(startMin + fallbackMin),
-            plannedMin: fallbackMin,
-            actualPersonId: null,
-            usageId: null,
-            status: "planned",
-            postponeToDayId: null,
-            reason: "",
-            notes: "",
-            createdAt: new Date().toISOString(),
-            createdBy: "manager",
-            archived: false,
-          };
-          actions.saveEntry(entry, true);
-        }}
-      />
+      {pickerOpen ? (
+        <ParticipantModal
+          day={day}
+          actor={actorName}
+          correctionReason={correctionReason}
+          onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
 
       {editEntry ? (
         <EntryEditor
@@ -739,32 +737,6 @@ export default function ActualDayScreen({
 
 /* ------------------------------ عناصر صغيرة ----------------------------- */
 
-function MiniStat({
-  label,
-  value,
-  tone = "green",
-}: {
-  label: string;
-  value: string;
-  tone?: "green" | "red" | "amber" | "gray";
-}) {
-  return (
-    <div className="rounded-2xl bg-gray-50 px-2 py-2 dark:bg-slate-700">
-      <div className="text-[10px] font-bold text-gray-400">{label}</div>
-      <div
-        className={cx(
-          "mt-0.5 text-xs font-extrabold",
-          tone === "green" && "text-emerald-700 dark:text-emerald-300",
-          tone === "red" && "text-red-600 dark:text-red-400",
-          tone === "amber" && "text-amber-600 dark:text-amber-400",
-          tone === "gray" && "text-gray-700 dark:text-slate-200"
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function SettlementSummary({
   totals,
@@ -777,17 +749,17 @@ function SettlementSummary({
     <div className="grid grid-cols-2 gap-2" data-testid="day-settlement-summary">
       <div className="rounded-2xl bg-gray-50 p-3 dark:bg-slate-700">
         <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-gray-700 dark:text-slate-200">
-          <Fuel size={13} className="text-emerald-600" /> الديزل
+          <Fuel size={13} className="text-sky-600 dark:text-sky-300" /> الديزل
         </div>
         <div className="mt-1.5 space-y-0.5 text-[11px]">
-          <Row label="الاستحقاق" value={formatMoney(totals.dieselDue, currency)} />
-          <Row label="مُسدَّد" value={formatMoney(totals.dieselPaid, currency)} tone="green" />
-          <Row
+          <MiniRow label="الاستحقاق" value={formatMoney(totals.dieselDue, currency)} />
+          <MiniRow label="مُسدَّد" value={formatMoney(totals.dieselPaid, currency)} tone="green" />
+          <MiniRow
             label={`نقص${totals.shortageLiters > 0 ? ` (${formatNumber(totals.shortageLiters)} لتر)` : ""}`}
             value={`${formatMoney(totals.shortageAmount, currency)} · ${totals.shortageCount}`}
             tone={totals.shortageAmount > 0 ? "amber" : "gray"}
           />
-          <Row
+          <MiniRow
             label={`غير مسدد · ${totals.unpaidCount}`}
             value={formatMoney(Math.max(0, totals.dieselOwed - totals.shortageAmount), currency)}
             tone={totals.unpaidCount > 0 ? "red" : "gray"}
@@ -796,86 +768,138 @@ function SettlementSummary({
       </div>
       <div className="rounded-2xl bg-gray-50 p-3 dark:bg-slate-700">
         <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-gray-700 dark:text-slate-200">
-          <HandCoins size={13} className="text-emerald-600" /> رسوم الرواسة
+          <HandCoins size={13} className="text-sky-600 dark:text-sky-300" /> رسوم الرواسة
         </div>
         <div className="mt-1.5 space-y-0.5 text-[11px]">
-          <Row label="المستحق" value={formatMoney(totals.royaltyDue, currency)} />
-          <Row
+          <MiniRow label="المستحق" value={formatMoney(totals.royaltyDue, currency)} />
+          <MiniRow
             label={`نقد · ${totals.cashCount}`}
             value={formatMoney(totals.royaltyCash, currency)}
             tone="green"
           />
-          <Row
+          <MiniRow
             label={`أجل · ${totals.creditCount}`}
             value={formatMoney(totals.royaltyCredit, currency)}
             tone={totals.creditCount > 0 ? "amber" : "gray"}
           />
-          <Row label="المستخدمون" value={`${totals.users}`} />
+          <MiniRow label="المستخدمون" value={`${totals.users}`} />
         </div>
       </div>
     </div>
   );
 }
 
-function Row({
-  label,
-  value,
-  tone = "gray",
-}: {
-  label: string;
-  value: string;
-  tone?: "green" | "amber" | "red" | "gray";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-gray-400">{label}</span>
-      <span
-        className={cx(
-          "font-extrabold",
-          tone === "green" && "text-emerald-700 dark:text-emerald-300",
-          tone === "amber" && "text-amber-600 dark:text-amber-400",
-          tone === "red" && "text-red-600 dark:text-red-400",
-          tone === "gray" && "text-gray-700 dark:text-slate-200"
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
 
-function DaySelector({ date, onChange }: { date: string; onChange: (d: string) => void }) {
+/**
+ * بطاقة التاريخ: بطاقة واحدة تضمّ ثلاث بطاقات صغيرة بارتفاع واحد
+ * (السابق · يوم الديالة · التالي)، وتحتها سطر بالتاريخ الكامل وزر «اليوم».
+ * الضغط على البطاقة الوسطى يفتح التقويم مباشرة لاختيار أي تاريخ.
+ */
+function DaySelector({
+  date,
+  onChange,
+  dayIndex,
+  dialaNumber,
+}: {
+  date: string;
+  onChange: (d: string) => void;
+  /** ترتيب التاريخ داخل ديالته (الأول، الثاني، الثالث…) — صفر إن لا ديالة */
+  dayIndex: number;
+  dialaNumber: number | null;
+}) {
+  const prev = addDaysISO(date, -1);
+  const next = addDaysISO(date, 1);
+  const isToday = date === todayISO();
+
+  const sideCard =
+    "flex min-h-[92px] flex-col items-center justify-center gap-1 rounded-2xl border border-gray-200 bg-gray-50 px-2 py-2 text-center transition hover:border-emerald-300 hover:bg-emerald-50/60 dark:border-slate-600 dark:bg-slate-700 dark:hover:border-emerald-500/60 dark:hover:bg-slate-600";
+
   return (
-    <Card className="flex items-center gap-2 p-3">
-      <button
-        onClick={() => onChange(addDaysISO(date, -1))}
-        className="rounded-xl bg-gray-100 p-2 text-gray-600 dark:bg-slate-700 dark:text-slate-200"
-        aria-label="اليوم السابق"
-      >
-        <ChevronRight size={16} />
-      </button>
-      <div className="flex-1">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-center text-xs font-bold text-gray-700 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-          aria-label="تاريخ اليوم الفعلي"
-        />
+    <Card className="p-3" data-testid="day-selector">
+      <div className="grid grid-cols-3 items-stretch gap-2">
+        {/* اليمين: اليوم السابق */}
+        <button
+          type="button"
+          onClick={() => onChange(prev)}
+          className={sideCard}
+          aria-label={`اليوم السابق ${isoToDayMonth(prev)}`}
+          data-testid="day-prev"
+        >
+          <span className="flex items-center gap-1 text-[10px] font-extrabold text-gray-500 dark:text-slate-300">
+            <ChevronRight size={12} /> السابق
+          </span>
+          <span className="text-[11px] font-bold text-gray-700 dark:text-slate-100">
+            {isoToDayMonth(prev)}
+          </span>
+        </button>
+
+        {/* الوسط: يوم الديالة — البطاقة كلها تفتح التقويم */}
+        <div
+          className="relative flex min-h-[92px] flex-col items-center justify-center gap-0.5 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 px-2 py-2 text-center text-white shadow-md shadow-emerald-600/25"
+          data-testid="day-center"
+        >
+          <span className="text-[10px] font-extrabold text-emerald-50/90">يوم الديالة</span>
+          <span className="text-2xl font-black leading-none">
+            {dayIndex > 0 ? dayOrdinal(dayIndex) : "—"}
+          </span>
+          <span className="text-[10px] font-bold text-emerald-50/90">
+            {dialaNumber ? `ديالة ${dialaNumber}` : "لا توجد ديالة"}
+          </span>
+          <span className="mt-0.5 text-[9px] font-bold text-emerald-50/80">
+            🗓 لتغيير التاريخ
+          </span>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => {
+              if (e.target.value) onChange(e.target.value);
+            }}
+            aria-label="تاريخ اليوم الفعلي"
+            data-testid="day-date-input"
+            className="absolute inset-0 h-full w-full cursor-pointer rounded-2xl opacity-0"
+          />
+        </div>
+
+        {/* اليسار: اليوم التالي */}
+        <button
+          type="button"
+          onClick={() => onChange(next)}
+          className={sideCard}
+          aria-label={`اليوم التالي ${isoToDayMonth(next)}`}
+          data-testid="day-next"
+        >
+          <span className="flex items-center gap-1 text-[10px] font-extrabold text-gray-500 dark:text-slate-300">
+            التالي <ChevronLeft size={12} />
+          </span>
+          <span className="text-[11px] font-bold text-gray-700 dark:text-slate-100">
+            {isoToDayMonth(next)}
+          </span>
+        </button>
       </div>
-      <button
-        onClick={() => onChange(addDaysISO(date, 1))}
-        className="rounded-xl bg-gray-100 p-2 text-gray-600 dark:bg-slate-700 dark:text-slate-200"
-        aria-label="اليوم التالي"
-      >
-        <ChevronLeft size={16} />
-      </button>
-      <button
-        onClick={() => onChange(todayISO())}
-        className="rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-      >
-        اليوم
-      </button>
+
+      {/* التاريخ كاملًا + رجوع سريع إلى اليوم */}
+      <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-slate-700">
+        <span
+          className="text-[11px] font-extrabold text-gray-700 dark:text-slate-100"
+          data-testid="day-full-date"
+        >
+          {isoToDisplay(date)}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(todayISO())}
+          aria-label="الرجوع إلى اليوم"
+          data-testid="day-today"
+          className={cx(
+            "rounded-xl px-3 py-1.5 text-[11px] font-extrabold transition",
+            isToday
+              ? "bg-brand-50 text-brand-700 ring-1 ring-brand-200 dark:bg-brand-800/50 dark:text-sky-200 dark:ring-brand-700"
+              : "bg-brand-700 text-white hover:bg-brand-800"
+          )}
+        >
+          اليوم
+        </button>
+      </div>
     </Card>
   );
 }
@@ -946,7 +970,7 @@ function DialaStrip({
   return (
     <Card className="p-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Layers size={15} className="text-emerald-600" />
+        <Layers size={15} className="text-sky-600 dark:text-sky-300" />
         <span className="text-xs font-extrabold text-gray-800 dark:text-white">ديالة {round.number}</span>
         <Pill tone="gray">{round.days} أيام</Pill>
         <Pill tone={round.locked ? "green" : "amber"}>
@@ -1009,7 +1033,7 @@ function DialaStrip({
         <button
           onClick={() => actions.lockRound(round.id, "manager")}
           aria-label={`حفظ أيام ديالة ${round.number}`}
-          className="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white"
+          className="mt-2 w-full rounded-xl bg-brand-700 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-brand-800"
         >
           <ShieldCheck size={13} className="inline -mt-0.5" /> حفظ أيام الديالة حتى لا تُحذف بسهولة
         </button>
@@ -1068,12 +1092,19 @@ function SettlementChips({
   onNeedUsage?: () => void;
 }) {
   const { actions } = useApp();
+  /**
+   * التبديل السريع من الصف: يغيّر الوضع فقط. تفصيل التسديد المخزَّن يبقى كما هو
+   * إلا ما يخصّ الوضع الجديد: الخروج من «نقص» يُصفّر لترات النقص، والخروج من
+   * «جزء نقد وجزء أجل» يُصفّر الجزء النقدي (فلا يبقى مبلغ قديم معلّقًا).
+   */
   const apply = (patch: { dieselSettlement?: DieselSettlement; royaltyPayMode?: RoyaltyPayMode }) => {
     actions.setUsageSettlement(usage.id, {
       dieselSettlement: patch.dieselSettlement ?? usage.dieselSettlement,
       dieselShortageLiters:
         patch.dieselSettlement && patch.dieselSettlement !== "shortage" ? 0 : usage.dieselShortageLiters,
       royaltyPayMode: patch.royaltyPayMode ?? usage.royaltyPayMode,
+      royaltyCashAmount: patch.royaltyPayMode && patch.royaltyPayMode !== "partial" ? 0 : undefined,
+      royaltyDeferredAmount: patch.royaltyPayMode && patch.royaltyPayMode !== "partial" ? 0 : undefined,
       settlementNote: "",
       reason: "تعديل من شاشة اليوم الفعلي",
       actor,
@@ -1152,12 +1183,51 @@ function SettlementChips({
   );
 }
 
+/** شريط اليوم الزمني: نافذة التشغيل · الموزَّع · المتبقي · أول فراغ متاح */
+function ShiftTimelineBar({ timeline }: { timeline: DayTimeline }) {
+  const pct =
+    timeline.capacityMin > 0
+      ? Math.max(0, Math.min(100, Math.round((timeline.distributedMin / timeline.capacityMin) * 100)))
+      : 0;
+  const gap = timeline.nextGap;
+  return (
+    <div
+      className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 dark:border-slate-700 dark:bg-slate-700/40"
+      data-testid="day-timeline-bar"
+    >
+      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+        <Pill tone="blue">
+          <span>
+            نافذة التشغيل {formatTimeRange(timeline.startTime, timeline.endTime)}
+          </span>
+        </Pill>
+        <Pill tone="green">الموزَّع {formatDuration(timeline.distributedMin)}</Pill>
+        <Pill tone={timeline.remainingMin > 0 ? "amber" : "gray"}>
+          المتبقي من الخطة {formatDuration(timeline.remainingMin)}
+        </Pill>
+        <Pill tone="violet">
+          {gap
+            ? `الفراغ القادم من ${formatTimeAmPm(gap.startTime)} (${formatDuration(gap.minutes)})`
+            : "اليوم ممتلئ حتى نهايته"}
+        </Pill>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-slate-600">
+        <div
+          className="h-full rounded-full bg-gradient-to-l from-cyan-500 to-sky-600 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-[10px] text-gray-400">
+        الترتيب الزمني إلزامي: لا تداخل ولا خروج عن نافذة التشغيل. التوزيع {pct}% من ساعات اليوم.
+      </p>
+    </div>
+  );
+}
+
 function EntryRow({
   index,
   entry,
   fromBaseRoster,
-  isFirst,
-  isLast,
   onEdit,
   onUsage,
   onEditPerson,
@@ -1167,10 +1237,8 @@ function EntryRow({
 }: {
   index: number;
   entry: DayEntry;
-  /** هل هذا الشخص من كشف الدوام الأساسي لديالة هذا اليوم */
+  /** هل هذا الشخص من كشف مساهمي ديالة هذا اليوم */
   fromBaseRoster: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   onEdit: () => void;
   onUsage: () => void;
   onEditPerson: () => void;
@@ -1191,7 +1259,7 @@ function EntryRow({
     if (!activeShift) return 0;
     return state.transactions
       .filter((t) => t.usageId === activeShift.id && t.status === "posted")
-      .reduce((s, t) => s + (t.direction === "debit" ? t.amount : -t.amount), 0);
+      .reduce((s, t) => s + txSignedAmount(t), 0);
   }, [state.transactions, activeShift]);
 
   return (
@@ -1234,7 +1302,7 @@ function EntryRow({
               <Pencil size={10} />
             </button>
             <span>
-              {entry.startTime} → {entry.endTime} · {formatDuration(minutes)}
+              {formatTimeRange(entry.startTime, entry.endTime)} · {formatDuration(minutes)}
               {overnight ? " · يعبر منتصف الليل" : ""}
             </span>
           </div>
@@ -1244,27 +1312,43 @@ function EntryRow({
             </div>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-col gap-1">
-          <div className="flex gap-1">
-            <button
-              onClick={() => actions.moveEntry(entry.id, -1)}
-              disabled={isFirst}
-              className="rounded-lg bg-gray-100 p-1.5 text-gray-600 disabled:opacity-30 dark:bg-slate-700 dark:text-slate-200"
-              aria-label="تقديم المستخدم"
-            >
-              <ArrowUp size={13} />
-            </button>
-            <button
-              onClick={() => actions.moveEntry(entry.id, 1)}
-              disabled={isLast}
-              className="rounded-lg bg-gray-100 p-1.5 text-gray-600 disabled:opacity-30 dark:bg-slate-700 dark:text-slate-200"
-              aria-label="تأخير المستخدم"
-            >
-              <ArrowDown size={13} />
-            </button>
-          </div>
-        </div>
+        <span className="shrink-0 rounded-xl bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+          #{index + 1}
+        </span>
       </div>
+
+      {activeShift ? (
+        <div
+          className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-2xl bg-white px-2.5 py-2 text-[10px] dark:bg-slate-800/60"
+          data-testid={`day-row-money-${entry.id}`}
+        >
+          <span className="text-gray-500 dark:text-slate-300">
+            ديزل مستحق: <b>{formatMoney(activeShift.fuelAmountDue, pump.currency)}</b>
+          </span>
+          <span className="text-emerald-700 dark:text-emerald-300">
+            مدفوع: <b>{formatMoney(dieselPaidPartOf(activeShift), pump.currency)}</b>
+          </span>
+          <span className="text-amber-700 dark:text-amber-300">
+            نقص: <b>{formatMoney(Math.max(0, Math.round(activeShift.fuelAmountDue) - dieselPaidPartOf(activeShift)), pump.currency)}</b>
+            {activeShift.dieselSettlement === "shortage" && activeShift.dieselShortageLiters > 0
+              ? ` (${formatNumber(activeShift.dieselShortageLiters)} لتر)`
+              : ""}
+          </span>
+          <span className="text-gray-500 dark:text-slate-300">
+            رواسة: <b>{royaltyModeLabel(activeShift.royaltyPayMode)}</b> — نقد{" "}
+            {formatMoney(royaltyCashPartOf(activeShift), pump.currency)} / أجل{" "}
+            {formatMoney(royaltyDeferredPartOf(activeShift), pump.currency)}
+          </span>
+          {entry.shortfallReason || activeShift.shortfallReason ? (
+            <span className="col-span-2 text-amber-700 dark:text-amber-300">
+              سبب نقص النصيب: <b>{shortfallReasonLabel(entry.shortfallReason ?? activeShift.shortfallReason)}</b>
+              {entry.shortfallNote || activeShift.shortfallNote
+                ? ` — ${entry.shortfallNote || activeShift.shortfallNote}`
+                : ""}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-2 flex flex-wrap items-start gap-x-3 gap-y-1.5 rounded-2xl bg-gray-50 px-2.5 py-2 dark:bg-slate-700/50">
         {activeShift ? (
@@ -1316,7 +1400,7 @@ function EntryRow({
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button
           onClick={onUsage}
-          className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+          className="rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
         >
           <PlayCircle size={13} className="inline -mt-0.5" /> {usage ? "تعديل الاستخدام" : "تسجيل الاستخدام الفعلي"}
         </button>
@@ -1382,10 +1466,10 @@ function ShortageModal({
           <NumberInput value={liters} onChange={(e) => setLiters(Number(e.target.value))} />
         </Field>
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-gray-50 p-3 text-[11px] dark:bg-slate-700">
-          <Row label="قيمة النقص (دين)" value={formatMoney(Math.min(amount, usage.fuelAmountDue), pump.currency)} tone="amber" />
-          <Row label="المسدد من الديزل" value={formatMoney(paidPart, pump.currency)} tone="green" />
-          <Row label="سعر اللتر وقت العملية" value={`${usage.fuelPriceSnapshot}`} />
-          <Row label="لتر/ساعة وقت العملية" value={`${usage.fuelPerHourSnapshot}`} />
+          <MiniRow label="قيمة النقص (دين)" value={formatMoney(Math.min(amount, usage.fuelAmountDue), pump.currency)} tone="amber" />
+          <MiniRow label="المسدد من الديزل" value={formatMoney(paidPart, pump.currency)} tone="green" />
+          <MiniRow label="سعر اللتر وقت العملية" value={`${usage.fuelPriceSnapshot}`} />
+          <MiniRow label="لتر/ساعة وقت العملية" value={`${usage.fuelPerHourSnapshot}`} />
         </div>
         <Field label="سبب / ملاحظة النقص">
           <TextInput
@@ -1468,12 +1552,29 @@ function EntryEditor({
   actor?: string;
 }) {
   const { state, actions } = useApp();
+  const pump = state.pump!;
   const [form, setForm] = useState<DayEntry>(entry);
   const [picking, setPicking] = useState<"person" | "actual" | null>(null);
   const minutes = durationMin(form.startTime, form.endTime);
 
   const set = <K extends keyof DayEntry>(key: K, value: DayEntry[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  /**
+   * تحذير الترتيب الزمني — المحرّك نفسه المستخدم في الإدخال الجديد. التعديل لا
+   * يُمنع (التعارض القديم يبقى مع مسار «تجاوز بسبب موثّق»)، لكن المسؤول يرى
+   * التداخل ووقتًا بديلًا قبل الحفظ.
+   */
+  const day = state.days.find((d) => d.id === entry.dayId) ?? null;
+  const conflicts = day
+    ? scheduleConflicts(state, day, pump, {
+        startTime: form.startTime,
+        endTime: form.endTime,
+        personId: form.personId,
+        entryId: form.id,
+      })
+    : [];
+  const suggested = conflicts.find((c) => c.suggestedStart)?.suggestedStart ?? null;
 
   return (
     <Modal open onClose={onClose} title="تعديل صف اليوم الفعلي">
@@ -1563,6 +1664,38 @@ function EntryEditor({
           <TextArea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} />
         </Field>
 
+        {conflicts.length > 0 ? (
+          <div
+            className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200"
+            data-testid="entry-conflict-warning"
+          >
+            <div className="font-extrabold">
+              <AlertTriangle size={13} className="inline -mt-0.5" /> تحذير ترتيب زمني — التعديل مسموح مع تسجيل
+              السبب
+            </div>
+            {conflicts.map((c, i) => (
+              <div key={i}>{c.message}</div>
+            ))}
+            {suggested ? (
+              <button
+                onClick={() => {
+                  const m = minutes > 0 ? minutes : 60;
+                  setForm((f) => ({
+                    ...f,
+                    startTime: suggested,
+                    endTime: minutesToTime(timeToMinutes(suggested) + m),
+                    plannedMin: m,
+                  }));
+                }}
+                className="rounded-xl bg-white px-2.5 py-1.5 font-bold text-amber-800 dark:bg-slate-800 dark:text-amber-300"
+                data-testid="entry-use-suggested"
+              >
+                استخدم الوقت المقترح {suggested}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex gap-2">
           <Button variant="ghost" className="flex-1" onClick={onClose}>
             إلغاء
@@ -1629,15 +1762,16 @@ function UsageModal({
   const pump = state.pump!;
   const day = state.days.find((d) => d.id === dayId)!;
   const existing = entry.usageId ? state.usages.find((u) => u.id === entry.usageId) : null;
+  /** العملية الأقدم لهذا اليوم/الصف (إن كان الاستخدام مرتبطًا بصف آخر) — لحفظ تفاصيلها */
+  const ownerUsage = existing ?? null;
   const [startTime, setStartTime] = useState(existing?.startTime ?? entry.startTime ?? nowTime());
   const [endTime, setEndTime] = useState(existing?.endTime ?? entry.endTime ?? minutesToTime(timeToMinutes(nowTime()) + 60));
   const [personId, setPersonId] = useState(existing?.personId ?? entry.actualPersonId ?? entry.personId);
   const [usageType, setUsageType] = useState<UsageType>(existing?.usageType ?? "share");
-  const [dieselSettlement, setDieselSettlement] = useState<DieselSettlement>(
-    existing?.dieselSettlement ?? "unpaid"
+  /** تفصيل التسديد من المحرّر الواحد — يُقرأ من العملية القائمة كما هو (لا يفقد تقسيمًا) */
+  const [settlement, setSettlement] = useState<SettlementDraft>(() =>
+    settlementFromUsage(existing ?? ownerUsage ?? {})
   );
-  const [shortageLiters, setShortageLiters] = useState(existing?.dieselShortageLiters ?? 0);
-  const [royaltyPayMode, setRoyaltyPayMode] = useState<RoyaltyPayMode>(existing?.royaltyPayMode ?? "credit");
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [reason, setReason] = useState("");
   const [picking, setPicking] = useState(false);
@@ -1660,15 +1794,23 @@ function UsageModal({
   const draft = computeUsageDraft(pump, day, startTime, endTime, { personalFuelPrice, stoppageMin });
   const shareholder = shareholderOfPerson(state, pump.id, personId);
   const right = shareholder ? currentRight(state, shareholder.id, day.date) : null;
-  const overlaps = overlapsFor(state, day, pump, startTime, endTime, existing?.id ?? null);
+  /** التعارض من المحرّك الواحد نفسه الذي يمنع الإدخال الجديد في شاشة اليوم */
+  const conflicts = scheduleConflicts(state, day, pump, {
+    startTime,
+    endTime,
+    personId,
+    entryId: entry.id,
+    usageId: existing?.id ?? null,
+  });
+  const overlaps = conflicts.filter((c) => c.kind === "overlap" || c.kind === "duplicate");
+  const windowConflicts = conflicts.filter((c) => c.kind === "window" || c.kind === "zero");
   const breakdown = capacityBreakdown(state, day, pump, draft.minutes, existing?.id ?? null);
   const usedPrice = draft.personalFuelPriceSnapshot > 0 ? draft.personalFuelPriceSnapshot : draft.fuelPriceSnapshot;
-  const shortageAmount = Math.min(
-    Math.round(shortageLiters * (usedPrice || 0)),
-    Math.round(draft.fuelAmountDue)
-  );
-  const dieselOwed =
-    dieselSettlement === "paid" ? 0 : dieselSettlement === "shortage" ? shortageAmount : Math.round(draft.fuelAmountDue);
+  const amounts = settlementAmounts(settlement, {
+    fuelDue: draft.fuelAmountDue,
+    royaltyDue: draft.royaltyAmountDue,
+    usedPrice,
+  });
 
   return (
     <Modal open onClose={onClose} title={existing ? "تعديل الاستخدام الفعلي" : "تسجيل الاستخدام الفعلي"}>
@@ -1704,20 +1846,20 @@ function UsageModal({
         </Field>
 
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-gray-50 p-3 text-[11px] dark:bg-slate-700">
-          <Row
+          <MiniRow
             label="عدد الساعات المستخدمة"
             value={`${formatDuration(draft.minutes)}${draft.crossesMidnight ? " (يعبر منتصف الليل)" : ""}`}
           />
-          <Row label="الاستهلاك (لتر/ساعة)" value={`${draft.fuelPerHourSnapshot}`} />
-          <Row label="اللترات" value={`${draft.fuelLiters} لتر`} />
-          <Row
+          <MiniRow label="الاستهلاك (لتر/ساعة)" value={`${draft.fuelPerHourSnapshot}`} />
+          <MiniRow label="اللترات" value={`${draft.fuelLiters} لتر`} />
+          <MiniRow
             label={draft.personalFuelPriceSnapshot > 0 ? "سعرك الشخصي" : "سعر اللتر (مرجعي)"}
             value={`${usedPrice}`}
           />
-          <Row label="تكلفة الديزل" value={formatMoney(draft.fuelAmountDue, pump.currency)} />
-          <Row label="الرواسة" value={formatMoney(draft.royaltyAmountDue, pump.currency)} />
-          <Row label="المسؤول عن التكلفة" value={findPerson(state, personId)?.name ?? "—"} />
-          <Row label="توقف داخل الفترة" value={formatDuration(draft.stoppageMin)} />
+          <MiniRow label="تكلفة الديزل" value={formatMoney(draft.fuelAmountDue, pump.currency)} />
+          <MiniRow label="الرواسة" value={formatMoney(draft.royaltyAmountDue, pump.currency)} />
+          <MiniRow label="المسؤول عن التكلفة" value={findPerson(state, personId)?.name ?? "—"} />
+          <MiniRow label="توقف داخل الفترة" value={formatDuration(draft.stoppageMin)} />
           <div className="col-span-2 text-[10px] leading-relaxed text-gray-400">
             تُحفظ هذه القيم داخل العملية (Snapshot): اللترات = الساعات × استهلاك الساعة، والتكلفة = اللترات ×
             السعر. أي تغيير لاحق في سعر الديزل أو استهلاك المضخة لا يعيد حساب هذه العملية.
@@ -1733,9 +1875,9 @@ function UsageModal({
               <AlertTriangle size={13} className="inline -mt-0.5" /> تعارض في الأوقات ({overlaps.length}) — لم
               يُحذف أي سجل
             </div>
-            {overlaps.map((o) => (
-              <div key={o.usageId} className="rounded-xl bg-white/70 px-2.5 py-1.5 dark:bg-slate-800">
-                {o.personName}: {o.startTime} → {o.endTime} — تداخل {formatDuration(o.minutes)}
+            {overlaps.map((c, i) => (
+              <div key={`${c.otherId ?? i}`} className="rounded-xl bg-white/70 px-2.5 py-1.5 dark:bg-slate-800">
+                {c.message}
               </div>
             ))}
             <label className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-2.5 py-2 dark:bg-slate-800">
@@ -1748,6 +1890,17 @@ function UsageModal({
                 aria-label="تأكيد التعارض"
               />
             </label>
+          </div>
+        ) : null}
+
+        {windowConflicts.length > 0 ? (
+          <div
+            className="space-y-1 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300"
+            data-testid="usage-window-warning"
+          >
+            {windowConflicts.map((c, i) => (
+              <div key={i}>{c.message}</div>
+            ))}
           </div>
         ) : null}
 
@@ -1771,67 +1924,16 @@ function UsageModal({
           </Select>
         </Field>
 
-        {/* تسديد الديزل — كل خيار له فعل مالي مختلف */}
-        <Field label="تسديد الديزل">
-          <div className="grid grid-cols-3 gap-1.5">
-            {DIESEL_SETTLEMENT_OPTIONS.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => setDieselSettlement(o.id)}
-                title={o.action}
-                className={cx(
-                  "rounded-2xl border px-2 py-2 text-[11px] font-bold transition",
-                  dieselSettlement === o.id
-                    ? o.id === "paid"
-                      ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                      : o.id === "shortage"
-                        ? "border-amber-400 bg-amber-50 text-amber-700"
-                        : "border-red-300 bg-red-50 text-red-600"
-                    : "border-gray-200 text-gray-500 dark:border-slate-600 dark:text-slate-300"
-                )}
-                aria-label={`تسديد الديزل: ${o.label}`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-        {dieselSettlement === "shortage" ? (
-          <Field label="عدد لترات النقص" hint="يُسجَّل النقص دينًا عليه، والباقي سداد">
-            <NumberInput value={shortageLiters} onChange={(e) => setShortageLiters(Number(e.target.value))} />
-          </Field>
-        ) : null}
-        <p className="rounded-2xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500 dark:bg-slate-700 dark:text-slate-300">
-          {DIESEL_SETTLEMENT_OPTIONS.find((o) => o.id === dieselSettlement)?.action} · يبقى عليه من الديزل:{" "}
-          <b>{formatMoney(dieselOwed, pump.currency)}</b>
-        </p>
-
-        {/* رسوم الرواسة — نقد أو أجل */}
-        <Field label="رسوم الرواسة">
-          <div className="grid grid-cols-2 gap-1.5">
-            {ROYALTY_MODE_OPTIONS.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => setRoyaltyPayMode(o.id)}
-                title={o.action}
-                className={cx(
-                  "rounded-2xl border px-2 py-2 text-[11px] font-bold transition",
-                  royaltyPayMode === o.id
-                    ? o.id === "cash"
-                      ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                      : "border-amber-400 bg-amber-50 text-amber-700"
-                    : "border-gray-200 text-gray-500 dark:border-slate-600 dark:text-slate-300"
-                )}
-                aria-label={`سداد الرواسة: ${o.label}`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <p className="rounded-2xl bg-gray-50 px-3 py-2 text-[11px] text-gray-500 dark:bg-slate-700 dark:text-slate-300">
-          {ROYALTY_MODE_OPTIONS.find((o) => o.id === royaltyPayMode)?.action} · {formatMoney(draft.royaltyAmountDue, pump.currency)}
-        </p>
+        {/* محرّر التسديد الموحّد — نفس محرّر نافذة المشارك (يشمل الرواسة الجزئية) */}
+        <SettlementEditor
+          value={settlement}
+          onChange={setSettlement}
+          fuelDue={draft.fuelAmountDue}
+          fuelLiters={draft.fuelLiters}
+          royaltyDue={draft.royaltyAmountDue}
+          usedPrice={usedPrice}
+          currency={pump.currency}
+        />
 
         <Field label="ملاحظات">
           <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
@@ -1873,9 +1975,15 @@ function UsageModal({
                 startTime,
                 endTime,
                 notes: notes || (overlaps.length > 0 ? `تعارض موقّع عليه — ${reason}` : notes),
-                dieselSettlement,
-                dieselShortageLiters: dieselSettlement === "shortage" ? shortageLiters : 0,
-                royaltyPayMode,
+                dieselSettlement: settlement.dieselSettlement,
+                dieselShortageLiters:
+                  settlement.dieselSettlement === "shortage" ? amounts.dieselShortageLiters : 0,
+                dieselPaidAmount: amounts.dieselPaid,
+                royaltyPayMode: settlement.royaltyPayMode,
+                royaltyCashAmount: amounts.royaltyCash,
+                royaltyDeferredAmount: amounts.royaltyDeferred,
+                shortfallReason: existing?.shortfallReason,
+                shortfallNote: existing?.shortfallNote ?? "",
                 settlementNote: notes,
                 overCapacityReason: reason,
                 personalFuelPrice,

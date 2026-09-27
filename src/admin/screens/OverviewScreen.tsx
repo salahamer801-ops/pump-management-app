@@ -77,7 +77,7 @@ export default function OverviewScreen() {
           </div>
 
           {/* مخطط التسجيلات */}
-          <SectionCard title="التسجيلات خلال ١٤ يومًا" hint="حسابات جديدة" actions={<TrendingUp size={15} className="text-emerald-600" />}>
+          <SectionCard title="التسجيلات خلال ١٤ يومًا" hint="حسابات جديدة" actions={<TrendingUp size={15} className="text-sky-600 dark:text-sky-300" />}>
             <div className="flex h-32 items-end gap-1.5">
               {data.series.map((s) => (
                 <div key={s.day} className="group flex flex-1 flex-col items-center justify-end gap-1">
@@ -122,7 +122,7 @@ export default function OverviewScreen() {
             </SectionCard>
 
             {/* أكثر المضخات أعضاءً */}
-            <SectionCard title="أكثر المضخات أعضاءً" actions={<Droplets size={15} className="text-emerald-600" />}>
+            <SectionCard title="أكثر المضخات أعضاءً" actions={<Droplets size={15} className="text-sky-600 dark:text-sky-300" />}>
               {data.topPumps.length === 0 ? (
                 <p className="text-[11px] text-gray-400">لا توجد مضخات بعد.</p>
               ) : (
@@ -136,11 +136,11 @@ export default function OverviewScreen() {
           </div>
 
           {/* آخر النشاط */}
-          <SectionCard title="آخر العمليات" actions={<Eye size={15} className="text-emerald-600" />}>
+          <SectionCard title="آخر العمليات" actions={<Eye size={15} className="text-sky-600 dark:text-sky-300" />}>
             <div className="space-y-2" data-testid="admin-recent">
               {data.recent.map((a) => (
                 <div key={a.id} className="flex items-start gap-2 rounded-2xl bg-gray-50 px-3 py-2 dark:bg-slate-700/60">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm dark:bg-slate-800">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-sky-600 shadow-sm dark:bg-slate-800 dark:text-sky-300">
                     <ShieldCheck size={12} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -162,7 +162,7 @@ export default function OverviewScreen() {
           </SectionCard>
 
           <Card className="flex flex-wrap items-center gap-3 p-4 text-[11px] text-gray-500 dark:text-slate-300">
-            <Users size={15} className="text-emerald-600" />
+            <Users size={15} className="text-sky-600 dark:text-sky-300" />
             لوحة النظام لا تُنشئ بيانات نيابة عن المسؤول: قراراتك هنا تُسجَّل باسمك، ويبقى الأصل محفوظًا مع
             تاريخه.
           </Card>

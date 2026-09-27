@@ -3,11 +3,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bell,
-  Cloud,
-  CloudOff,
-  CloudUpload,
   CalendarCheck,
-  Droplets,
   Fuel,
   Info,
   LayoutDashboard,
@@ -24,6 +20,7 @@ import type { ManagedPump } from "../auth/types";
 import { unreadNotifications } from "../domain/rules";
 import { formatClock } from "../domain/util";
 import { cx, Modal, Pill } from "../components/ui";
+import { BrandLogo } from "../components/Brand";
 import PumpSetup from "./PumpSetup";
 import Dashboard from "./screens/Dashboard";
 import ActualDayScreen from "./screens/ActualDayScreen";
@@ -58,14 +55,11 @@ const NAV: { id: ManagerTab; label: string; icon: React.ReactNode }[] = [
 export default function ManagerApp({
   pump: managedPump,
   onSwitchPump,
-  offline = false,
 }: {
   pump: ManagedPump;
   onSwitchPump: () => void;
-  /** وضع تجريبي محلي: لا نداءات للخادم (طلبات الربط والأعضاء والسجل) */
-  offline?: boolean;
 }) {
-  const { state, actions, syncState } = useApp();
+  const { state, actions } = useApp();
   const { user, logout } = useAuth();
   const userName = user?.name ?? "المسؤول";
   const [tab, setTab] = useState<ManagerTab>("home");
@@ -75,20 +69,18 @@ export default function ManagerApp({
 
   const refreshPending = useMemo(
     () => () => {
-      if (offline) return;
       listRequests(managedPump.id)
         .then((rows) => setPendingCount(rows.length))
         .catch(() => undefined);
     },
-    [managedPump.id, offline]
+    [managedPump.id]
   );
 
   useEffect(() => {
     refreshPending();
   }, [refreshPending]);
 
-  /** في الوضع التجريبي المحلي تُخفى شاشة «الحسابات» لأنها تعمل على الخادم */
-  const navItems = useMemo(() => (offline ? NAV.filter((n) => n.id !== "accounts") : NAV), [offline]);
+  const navItems = NAV;
 
   const unread = useMemo(() => unreadNotifications(state).length, [state]);
   const pendingSync = useMemo(
@@ -107,19 +99,17 @@ export default function ManagerApp({
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl pb-24">
-      <header className="sticky top-0 z-30 border-b border-emerald-100/60 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
+      <header className="sticky top-0 z-30 border-b border-brand-100/70 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-md shadow-emerald-600/20">
-              <Droplets size={18} />
-            </div>
+            <BrandLogo size={38} />
             <div className="min-w-0">
               <div className="truncate text-sm font-black leading-tight text-gray-900 dark:text-white">
                 {pump.name}
               </div>
               <div className="text-xs text-gray-400">
                 لوحة المسؤول · {userName || "المسؤول"} ·{" "}
-                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="font-mono font-bold text-brand-600 dark:text-sky-300">
                   {managedPump.pumpCode}
                 </span>
               </div>
@@ -127,26 +117,6 @@ export default function ManagerApp({
           </div>
 
           <div className="flex items-center gap-1">
-            {/* حالة حفظ بيانات التشغيل الرسمية على الخادم (PostgreSQL) */}
-            {syncState === "synced" ? (
-              <span data-testid="cloud-synced">
-                <Pill tone="green" className="hidden sm:inline-flex">
-                  <Cloud size={12} /> محفوظ على الخادم
-                </Pill>
-              </span>
-            ) : syncState === "connecting" ? (
-              <span data-testid="cloud-saving">
-                <Pill tone="gray" className="hidden sm:inline-flex">
-                  <CloudUpload size={12} /> جارٍ الحفظ…
-                </Pill>
-              </span>
-            ) : syncState === "offline" ? (
-              <span data-testid="cloud-offline">
-                <Pill tone="amber" className="hidden sm:inline-flex">
-                  <CloudOff size={12} /> لا يوجد اتصال بالإنترنت
-                </Pill>
-              </span>
-            ) : null}
             {pendingSync > 0 ? (
               <Pill tone="amber" className="hidden sm:inline-flex">
                 <Fuel size={12} /> {pendingSync} غير متزامن
@@ -174,29 +144,28 @@ export default function ManagerApp({
       <main className="px-4 py-4">
         {tab === "home" && <Dashboard onOpenDay={openDay} onGoTab={setTab} />}
         {tab === "day" && (
-          <ActualDayScreen dayId={selectedDayId} onChangeDay={setSelectedDayId} />
+          <ActualDayScreen
+            dayId={selectedDayId}
+            onChangeDay={setSelectedDayId}
+            onOpenDiala={() => setTab("diala")}
+          />
         )}
         {tab === "people" && <PeopleScreen />}
         {tab === "diala" && <DialaScreen onOpenDay={openDay} />}
         {tab === "finance" && <FinanceScreen />}
         {tab === "reports" && <ReportsScreen />}
-        {tab === "accounts" && (
-          <PumpAccountsScreen
-            pump={managedPump}
+        {tab === "accounts" && <PumpAccountsScreen pump={managedPump} onChanged={refreshPending} />}
+        {tab === "settings" && (
+          <SettingsScreen
+            onLogout={() => void logout()}
+            userName={userName}
             onSwitchPump={onSwitchPump}
-            onChanged={refreshPending}
           />
         )}
-        {tab === "settings" && <SettingsScreen onLogout={() => void logout()} userName={userName} />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-        <div
-          className={cx(
-            "mx-auto grid max-w-2xl",
-            navItems.length === NAV.length ? "grid-cols-8" : "grid-cols-7"
-          )}
-        >
+        <div className="mx-auto grid max-w-2xl grid-cols-8">
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -206,14 +175,14 @@ export default function ManagerApp({
               className={cx(
                 "flex flex-col items-center gap-0.5 py-2.5 text-[9px] font-bold transition",
                 tab === item.id
-                  ? "text-emerald-700 dark:text-emerald-400"
+                  ? "text-brand-700 dark:text-sky-300"
                   : "text-gray-400 hover:text-gray-600 dark:text-slate-500"
               )}
             >
               <span
                 className={cx(
                   "relative flex h-8 w-10 items-center justify-center rounded-full transition",
-                  tab === item.id && "bg-emerald-50 dark:bg-emerald-900/40"
+                  tab === item.id && "bg-gradient-to-br from-brand-50 to-sky-50 dark:from-brand-800/60 dark:to-slate-800"
                 )}
               >
                 {item.icon}

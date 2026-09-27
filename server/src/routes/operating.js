@@ -194,6 +194,8 @@ const SPECS = {
       postponeToDayId: asText,
       reason: asText,
       notes: asText,
+      shortfallReason: asText,
+      shortfallNote: asText,
       entryType: asText,
     },
     dates: [],
@@ -215,6 +217,11 @@ const SPECS = {
       stoppageMin: asNum,
       dieselSettlement: asText,
       dieselShortageLiters: asNum,
+      dieselPaidAmount: asNum,
+      royaltyCashAmount: asNum,
+      royaltyDeferredAmount: asNum,
+      shortfallReason: asText,
+      shortfallNote: asText,
     },
     dates: [["date", "date"]],
   },
@@ -299,9 +306,21 @@ async function upsertCollection(tx, key, pumpId, rows, actorId) {
       cols.push(COLUMN_OVERRIDES[prop] ?? camelToSnake(prop));
       vals.push(fn(raw[prop]));
     }
+    /*
+     * بعض المجموعات لها أكثر من اسم حقل في الواجهة يقابل نفس عمود التاريخ
+     * (recordDate/date/paidAt ← record_date). يُكتب العمود مرة واحدة فقط،
+     * والقيمة تأتي من أول حقل موجود، فإن كان فارغًا يُجرَّب البديل.
+     */
+    const dateCols = new Map();
     for (const [prop, column] of spec.dates) {
-      cols.push(COLUMN_OVERRIDES[column] ?? column);
-      vals.push(asDate(raw[prop]));
+      const col = COLUMN_OVERRIDES[column] ?? column;
+      const value = asDate(raw[prop]);
+      if (!dateCols.has(col)) dateCols.set(col, value);
+      else if (dateCols.get(col) === null && value !== null) dateCols.set(col, value);
+    }
+    for (const [col, value] of dateCols) {
+      cols.push(col);
+      vals.push(value);
     }
     cols.push("payload");
     vals.push(JSON.stringify(raw));
@@ -469,6 +488,8 @@ async function readOperating(pumpId, userId) {
     operatorRecords: operators.rows.map(rowOut),
     financeRecords: finance.rows.map(rowOut),
     personalRecords: personal.rows.map(rowOut),
+    /* كيانات لم تُنمذَج كأعمدة (حقوق، تسويات، تصحيحات…) — تُعاد كما حُفظت */
+    extra: syncRow?.extra && typeof syncRow.extra === "object" ? syncRow.extra : {},
     meta: {
       version: syncRow ? Number(syncRow.version) : 0,
       migratedAt: syncRow?.migrated_at ?? null,

@@ -26,8 +26,9 @@ import {
   dayEntries,
   dayNumberInRound,
   dayOrdinal,
+  txSignedAmount,
 } from "../../domain/rules";
-import { durationMin, formatDuration, minutesToTime, timeToMinutes, todayISO, uid } from "../../domain/util";
+import {durationMin, formatDuration, formatTimeRange, minutesToTime, timeToMinutes, todayISO, uid} from "../../domain/util";
 import { formatMoney, formatNumber } from "../../format";
 import { Button, Card, Field, Modal, NumberInput, Pill, StatCard, TextArea, TextInput, TimeInput, cx } from "../../components/ui";
 
@@ -108,7 +109,7 @@ export default function OfficialScreen() {
     const shareholder = manager.shareholders.find((s) => s.personId === personId && !s.archived) ?? null;
     const balance = manager.transactions
       .filter((t) => t.personId === personId && t.status === "posted")
-      .reduce((s, t) => s + (t.direction === "debit" ? t.amount : -t.amount), 0);
+      .reduce((s, t) => s + txSignedAmount(t), 0);
 
     const dates = Array.from(
       new Set<string>([...usages.map((u) => u.date), ...personal.map((p) => p.date)])
@@ -205,7 +206,7 @@ export default function OfficialScreen() {
 
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <Link2 size={16} className="text-emerald-600" />
+          <Link2 size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">ارتباطي بالمضخة</h2>
           {approvedLink ? (
             <Pill tone="green" className="mr-auto">
@@ -223,7 +224,7 @@ export default function OfficialScreen() {
         {person ? (
           <div className="mt-2 space-y-1">
             <div className="flex items-center gap-2 text-xs font-extrabold text-gray-800 dark:text-white">
-              <BadgeCheck size={14} className="text-emerald-600" /> {person.name}
+              <BadgeCheck size={14} className="text-sky-600 dark:text-sky-300" /> {person.name}
               {myData?.shareholder ? (
                 <Pill tone="green">
                   مساهم أساسي · {formatNumber(myData.shareholder.units)} {pump.shareUnit}
@@ -280,7 +281,7 @@ export default function OfficialScreen() {
 
           <Card className="p-4">
             <div className="mb-2 flex items-center gap-2">
-              <CalendarClock size={16} className="text-emerald-600" />
+              <CalendarClock size={16} className="text-sky-600 dark:text-sky-300" />
               <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">دوري القادم</h2>
             </div>
             {myData.upcoming.length === 0 ? (
@@ -297,7 +298,8 @@ export default function OfficialScreen() {
                         {day!.date === todayISO() ? "اليوم" : day!.date} — ديالة {day!.dialaNumber}
                       </div>
                       <div className="text-gray-400">
-                        {entry.startTime} → {entry.endTime} · {formatDuration(durationMin(entry.startTime, entry.endTime))}
+                        {formatTimeRange(entry.startTime, entry.endTime)} ·{" "}
+                        {formatDuration(durationMin(entry.startTime, entry.endTime))}
                       </div>
                     </div>
                     <Pill tone={entry.status === "done" ? "green" : entry.status === "cancelled" ? "red" : "blue"}>
@@ -312,7 +314,7 @@ export default function OfficialScreen() {
           {/* 1) الدوام الأساسي — كشف الديالة: نصيبي وترتيبي */}
           <Card className="p-4" data-testid="user-base-shift">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <ListOrdered size={16} className="text-emerald-600" />
+              <ListOrdered size={16} className="text-sky-600 dark:text-sky-300" />
               <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
                 الدوام الأساسي — كشف {baseInfo?.round ? `ديالة ${baseInfo.round.number}` : "الديالة"}
               </h2>
@@ -342,7 +344,7 @@ export default function OfficialScreen() {
                         </span>
                       </div>
                       <div className="mt-1 text-[11px] text-emerald-800/80 dark:text-emerald-300/80">
-                        وقتي في الكشف: {baseInfo.mine.startTime} → {baseInfo.mine.endTime} · قبلي{" "}
+                        وقتي في الكشف: {formatTimeRange(baseInfo.mine.startTime, baseInfo.mine.endTime)} · قبلي{" "}
                         {baseInfo.mine.order} مساهمًا
                       </div>
                     </>
@@ -388,7 +390,7 @@ export default function OfficialScreen() {
                           {row.name}
                         </span>
                         <span className="text-gray-400">
-                          {row.startTime} → {row.endTime}
+                          {formatTimeRange(row.startTime, row.endTime)}
                         </span>
                         <span className="font-bold">{formatDuration(row.shareMin)}</span>
                       </div>
@@ -402,7 +404,7 @@ export default function OfficialScreen() {
           {/* 2) الدوام الفعلي — من أخذ ماءه في هذا اليوم */}
           <Card className="p-4" data-testid="user-actual-shift">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Users size={16} className="text-emerald-600" />
+              <Users size={16} className="text-sky-600 dark:text-sky-300" />
               <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
                 الدوام الفعلي — {actualInfo ? (actualInfo.isToday ? "اليوم" : actualInfo.day.date) : "لا يوجد"}
               </h2>
@@ -427,7 +429,7 @@ export default function OfficialScreen() {
                         موقفي: {actualInfo.myIndex + 1} من {actualInfo.rows.length}
                       </span>
                       <span className="text-emerald-700/70 dark:text-emerald-300/70">
-                        · {actualInfo.mine.startTime} → {actualInfo.mine.endTime} ·{" "}
+                        · {formatTimeRange(actualInfo.mine.startTime, actualInfo.mine.endTime)} ·{" "}
                         {formatDuration(
                           durationMin(actualInfo.mine.startTime, actualInfo.mine.endTime)
                         )}
@@ -486,7 +488,7 @@ export default function OfficialScreen() {
                           {manager.persons.find((x) => x.id === (e.actualPersonId ?? e.personId))?.name ?? "—"}
                         </span>
                         <span className="text-gray-400">
-                          {e.startTime} → {e.endTime}
+                          {formatTimeRange(e.startTime, e.endTime)}
                         </span>
                         <span
                           className={cx(
@@ -510,7 +512,7 @@ export default function OfficialScreen() {
 
           <Card className="p-4">
             <div className="mb-2 flex items-center gap-2">
-              <Scale size={16} className="text-emerald-600" />
+              <Scale size={16} className="text-sky-600 dark:text-sky-300" />
               <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
                 سجلي الرسمي مقابل سجلي الشخصي
               </h2>
@@ -548,11 +550,11 @@ export default function OfficialScreen() {
 
           <Card className="p-4">
             <div className="mb-2 flex items-center gap-2">
-              <ClipboardCheck size={16} className="text-emerald-600" />
+              <ClipboardCheck size={16} className="text-sky-600 dark:text-sky-300" />
               <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">سجلاتي الرسمية</h2>
               <button
                 onClick={() => setRecordOpen(true)}
-                className="mr-auto rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+                className="mr-auto rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
               >
                 <Plus size={12} className="inline -mt-0.5" /> تسجيل يومي
               </button>
@@ -570,7 +572,7 @@ export default function OfficialScreen() {
                       className="flex items-center gap-2 rounded-2xl border border-gray-100 px-3 py-2 text-[11px] dark:border-slate-700"
                     >
                       <span className="flex-1 font-bold text-gray-700 dark:text-slate-200">
-                        {u.date} · {u.startTime} → {u.endTime}
+                        {u.date} · {formatTimeRange(u.startTime, u.endTime)}
                       </span>
                       <span className="text-gray-500 dark:text-slate-300">{formatDuration(u.minutes)}</span>
                       <span className="text-gray-400">{formatNumber(u.fuelLiters)} لتر</span>

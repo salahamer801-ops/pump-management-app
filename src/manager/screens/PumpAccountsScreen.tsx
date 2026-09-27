@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeftRight,
   Check,
   Copy,
   History,
@@ -50,11 +49,9 @@ type Panel = "requests" | "members" | "log";
  */
 export default function PumpAccountsScreen({
   pump,
-  onSwitchPump,
   onChanged,
 }: {
   pump: ManagedPump;
-  onSwitchPump: () => void;
   onChanged: () => void;
 }) {
   const { state } = useApp();
@@ -175,7 +172,7 @@ export default function PumpAccountsScreen({
     <div className="space-y-4">
       <Card className="space-y-3 p-4">
         <div className="flex items-center gap-2">
-          <ShieldCheck size={18} className="text-emerald-600" />
+          <ShieldCheck size={18} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">هوية المضخة والصلاحيات</h2>
           <button
             onClick={() => void load()}
@@ -206,9 +203,6 @@ export default function PumpAccountsScreen({
           </p>
         </div>
 
-        <Button variant="outline" className="w-full" onClick={onSwitchPump} data-testid="switch-pump">
-          <ArrowLeftRight size={16} /> تبديل المضخة / إنشاء مضخة أخرى
-        </Button>
       </Card>
 
       {error ? (
@@ -382,7 +376,7 @@ export default function PumpAccountsScreen({
               {logs.map((row) => (
                 <div key={row.id} className="rounded-2xl bg-gray-50 px-3 py-2 dark:bg-slate-700/60">
                   <div className="flex items-center gap-2 text-[11px] font-bold text-gray-700 dark:text-slate-200">
-                    <History size={12} className="text-emerald-600" />
+                    <History size={12} className="text-sky-600 dark:text-sky-300" />
                     {ACTION_LABEL[row.action] ?? row.action}
                     <span className="mr-auto text-[10px] font-normal text-gray-400">{formatClock(row.at)}</span>
                   </div>

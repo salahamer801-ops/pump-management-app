@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -32,6 +33,7 @@ import type {
   Pump,
   RoyaltyPayMode,
   Settlement,
+  ShortfallReason,
   ShareRight,
   Shareholder,
   Stoppage,
@@ -41,11 +43,10 @@ import type {
   TransferEvent,
   UsageType,
 } from "./domain/types";
-import { durationMin, isoToShort, nowTime, timeToMinutes, todayISO, uid } from "./domain/util";
+import {durationMin, formatTimeRange, isoToShort, nowTime, timeToMinutes, todayISO, uid} from "./domain/util";
 import {
   computeUsageDraft,
   conflictTypeLabel,
-  dayEntries as entriesOfDay,
   debtStatusOf,
   detectConflicts,
   dieselSettlementLabel,
@@ -53,8 +54,8 @@ import {
   mergeConflicts,
   paymentMethodLabel,
   personBalance,
+  scheduleConflicts,
   personName,
-  planEntriesFromBaseRoster,
   baseRosterRows,
   baseRosterCapacityMin,
   baseRosterFits,
@@ -69,9 +70,12 @@ import {
 import { emptyState, migrateV1, normalizeState, seedDemo } from "./domain/migrate";
 import {
   applyPayload,
+  applyServerPumpIdentity,
+  hasOperatingData,
   pullOperating,
   pushOperating,
   resolveServerPumpId,
+  responseHasOperatingData,
 } from "./domain/serverSync";
 import { getToken } from "./auth/api";
 import { LEGACY_MANAGER_STORAGE_KEY as LEGACY_KEY, MANAGER_STORAGE_KEY as STORAGE_KEY } from "./domain/storage";
@@ -104,14 +108,6 @@ export type Action =
   | { type: "UNLOCK_ROUND"; id: string; reason: string; actor: string }
   | { type: "ARCHIVE_ROUND"; id: string; archived: boolean; reason?: string; actor?: string; force?: boolean }
   | { type: "SAVE_ENTRY"; entry: DayEntry; isNew: boolean; correctionReason?: string; actor?: string }
-  | { type: "SAVE_ENTRIES"; dayId: string; entries: DayEntry[]; correctionReason?: string; actor?: string }
-  | { type: "MOVE_ENTRY"; id: string; dir: -1 | 1 }
-  | {
-      type: "APPLY_BASE_ROSTER_TO_DAY";
-      dayId: string;
-      correctionReason?: string;
-      actor?: string;
-    }
   | {
       type: "SAVE_BASE_ROSTER_MEMBER";
       roundId: string;
@@ -151,7 +147,15 @@ export type Action =
       notes: string;
       dieselSettlement: DieselSettlement;
       dieselShortageLiters: number;
+      /** المبلغ المدفوع فعلًا من قيمة الديزل (0 = يُحسب من الحالة) */
+      dieselPaidAmount?: number;
       royaltyPayMode: RoyaltyPayMode;
+      /** عند «جزء نقد وجزء أجل» */
+      royaltyCashAmount?: number;
+      royaltyDeferredAmount?: number;
+      /** سبب نقص نصيب المشارك عن أساسه */
+      shortfallReason?: ShortfallReason;
+      shortfallNote?: string;
       settlementNote: string;
       overCapacityReason: string;
       /** السعر الذي سجّله المستخدم لهذه العملية (§9) */
@@ -166,7 +170,12 @@ export type Action =
       usageId: string;
       dieselSettlement: DieselSettlement;
       dieselShortageLiters: number;
+      dieselPaidAmount?: number;
       royaltyPayMode: RoyaltyPayMode;
+      royaltyCashAmount?: number;
+      royaltyDeferredAmount?: number;
+      shortfallReason?: ShortfallReason;
+      shortfallNote?: string;
       settlementNote: string;
       actor: string;
       reason: string;
@@ -342,10 +351,33 @@ function refuse(state: AppState, log: LogInput): AppState {
   return commit(state, state, log);
 }
 
-function normalizeOrders(entries: DayEntry[]): DayEntry[] {  return entries
-    .slice()
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((e, i) => ({ ...e, orderIndex: i }));
+/**
+ * ترقيم الصفوف بترتيب المصفوفة المعطاة (لا يُعاد الترتيب): كل من يبني القائمة
+ * مسؤول عن ترتيبها — والترتيب في اليوم الفعلي زمني بالضرورة.
+ */
+function normalizeOrders(entries: DayEntry[]): DayEntry[] {
+  return entries.map((e, i) => ({ ...e, orderIndex: i }));
+}
+
+/** ترتيب صفوف كل يوم زمنيًا حسب ساعة البداية — الترتيب في اليوم يتبع الساعة */
+function sortEntriesByTime(entries: DayEntry[]): DayEntry[] {
+  const byDay = new Map<string, DayEntry[]>();
+  for (const e of entries) {
+    const list = byDay.get(e.dayId);
+    if (list) list.push(e);
+    else byDay.set(e.dayId, [e]);
+  }
+  const out: DayEntry[] = [];
+  for (const list of byDay.values()) {
+    out.push(
+      ...list
+        .slice()
+        .sort(
+          (a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime) || a.orderIndex - b.orderIndex
+        )
+    );
+  }
+  return out;
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -587,7 +619,7 @@ function reducer(state: AppState, action: Action): AppState {
     case "CREATE_DAY": {
       const exists = state.days.find((d) => d.date === action.day.date && !d.archived);
       if (exists) return state;
-      if (action.planFromSchedule && !state.pump) return state;
+
       /** الجدول الأساسي يُثبَّت مرة واحدة عند الإنشاء، ثم لا يتغيّر بتعديل اليوم الفعلي (§4) */
       const dayRecord: DialaDay = {
         ...action.day,
@@ -598,15 +630,11 @@ function reducer(state: AppState, action: Action): AppState {
           action.day.capacityMin ||
           durationMin(action.day.workStart, action.day.workEnd),
       };
-      /* يوم جديد: «الدوام الفعلي» يبدأ يدويًا من كشف الديالة، فلا صفوف تلقائية */
-      const dayPlan = action.planFromSchedule && state.pump
-        ? planEntriesFromBaseRoster(
-            { ...state, days: [...state.days, dayRecord] },
-            state.pump,
-            dayRecord
-          ).map((e) => ({ ...e, dayId: dayRecord.id }) as DayEntry)
-        : null;
-      const entries: DayEntry[] = dayPlan ?? action.entries.map((e) => ({ ...e, dayId: action.day.id }));
+      /*
+       * لا مشروع تلقائي: كشف الديالة مرجع لا يحجز ساعات، و«الدوام الفعلي» يُبنى
+       * مشاركًا مشاركًا من شاشة اليوم. اليوم الجديد يُنشأ بلا أي صف.
+       */
+      const entries: DayEntry[] = action.entries.map((e) => ({ ...e, dayId: action.day.id }));
       const next = {
         ...state,
         days: [...state.days, dayRecord],
@@ -1012,6 +1040,24 @@ function reducer(state: AppState, action: Action): AppState {
     case "SAVE_ENTRY": {
       const exists = state.entries.some((e) => e.id === action.entry.id);
       const before = state.entries.find((e) => e.id === action.entry.id);
+      /*
+       * الترتيب الزمني إلزامي في الإدخال الجديد: لا تداخل ولا خروج عن نافذة
+       * تشغيل اليوم ولا مدة صفرية. المنع هنا في المخزن (مصدر واحد للحقيقة)
+       * والشاشة تعرض السبب والوقت البديل. التعديل على صف قديم يبقى متاحًا
+       * بمسار «تجاوز بسبب موثّق» فلا يُفقد أي تاريخ.
+       */
+      if (!exists && state.pump) {
+        const targetDay = state.days.find((d) => d.id === action.entry.dayId) ?? null;
+        if (targetDay) {
+          const conflicts = scheduleConflicts(state, targetDay, state.pump, {
+            startTime: action.entry.startTime,
+            endTime: action.entry.endTime,
+            personId: action.entry.personId,
+            entryId: action.entry.id,
+          });
+          if (conflicts.length > 0) return state;
+        }
+      }
       let entries: DayEntry[];
       if (exists) {
         entries = state.entries.map((e) => (e.id === action.entry.id ? action.entry : e));
@@ -1024,6 +1070,8 @@ function reducer(state: AppState, action: Action): AppState {
           { ...action.entry, orderIndex: dayList.length },
         ];
       }
+      /* ترتيب الصفوف زمنيًا: الترتيب في اليوم يتبع الساعة لا الإدخال */
+      entries = sortEntriesByTime(entries);
       const next = { ...state, entries: normalizeOrders(entries) };
       const corrections = withCorrection(
         state,
@@ -1031,8 +1079,8 @@ function reducer(state: AppState, action: Action): AppState {
         "entry",
         action.entry.id,
         "times",
-        before ? `${before.startTime} → ${before.endTime}` : "",
-        `${action.entry.startTime} → ${action.entry.endTime}`,
+        before ? formatTimeRange(before.startTime, before.endTime) : "",
+        formatTimeRange(action.entry.startTime, action.entry.endTime),
         action.correctionReason ?? "",
         action.actor ?? "manager"
       );
@@ -1040,62 +1088,12 @@ function reducer(state: AppState, action: Action): AppState {
         action: exists ? "update" : "create",
         entity: "entry",
         entityId: action.entry.id,
-        summary: `${exists ? "تعديل" : "إضافة"} ${findPerson(state, action.entry.personId)?.name ?? ""} في اليوم (${action.entry.startTime} → ${action.entry.endTime})`,
+        summary: `${exists ? "تعديل" : "إضافة"} ${findPerson(state, action.entry.personId)?.name ?? ""} في اليوم (${formatTimeRange(action.entry.startTime, action.entry.endTime)})`,
         before,
         after: action.entry,
         reason: action.correctionReason,
         actor: action.actor,
         op: exists ? "update" : "create",
-      });
-    }
-
-    case "SAVE_ENTRIES": {
-      const others = state.entries.filter((e) => e.dayId !== action.dayId);
-      const next = { ...state, entries: [...others, ...normalizeOrders(action.entries)] };
-      const corrections = withCorrection(
-        state,
-        action.dayId,
-        "day",
-        action.dayId,
-        "entries",
-        entriesOfDay(state, action.dayId).map((e) => ({ p: e.personId, t: `${e.startTime}-${e.endTime}` })),
-        action.entries.map((e) => ({ p: e.personId, t: `${e.startTime}-${e.endTime}` })),
-        action.correctionReason ?? "",
-        action.actor ?? "manager"
-      );
-      return commit(state, { ...next, corrections }, {
-        action: "update",
-        entity: "day",
-        entityId: action.dayId,
-        summary: `إعادة ترتيب اليوم (${action.entries.length} صف)`,
-        after: action.entries.map((e) => ({ p: e.personId, o: e.orderIndex })),
-        reason: action.correctionReason,
-        actor: action.actor,
-      });
-    }
-
-    case "MOVE_ENTRY": {
-      const list = entriesOfDay(state, state.entries.find((e) => e.id === action.id)?.dayId ?? "");
-      const index = list.findIndex((e) => e.id === action.id);
-      const target = index + action.dir;
-      if (index < 0 || target < 0 || target >= list.length) return state;
-      const swapped = list.slice();
-      const tmp = swapped[index];
-      swapped[index] = swapped[target];
-      swapped[target] = tmp;
-      const reordered = normalizeOrders(swapped);
-      const map = new Map(reordered.map((e) => [e.id, e]));
-      const next = {
-        ...state,
-        entries: state.entries.map((e) => map.get(e.id) ?? e),
-      };
-      return commit(state, next, {
-        action: "update",
-        entity: "entry",
-        entityId: action.id,
-        summary: `${action.dir === -1 ? "تقديم" : "تأخير"} ${findPerson(state, swapped[target].personId)?.name ?? ""} في ترتيب اليوم`,
-        before: { orderIndex: index },
-        after: { orderIndex: target },
       });
     }
 
@@ -1300,81 +1298,6 @@ function reducer(state: AppState, action: Action): AppState {
       });
     }
 
-    case "APPLY_BASE_ROSTER_TO_DAY": {
-      if (!state.pump) return state;
-      const day = state.days.find((d) => d.id === action.dayId);
-      if (!day) return state;
-      const planned = planEntriesFromBaseRoster(state, state.pump, day);
-      const at = new Date().toISOString();
-      const actor = action.actor ?? "manager";
-      const current = state.entries.filter((e) => e.dayId === day.id && !e.archived);
-      const byPerson = new Map<string, DayEntry>();
-      for (const e of current) if (!byPerson.has(e.personId)) byPerson.set(e.personId, e);
-
-      /** الصفوف التي لها استخدام مسجَّل لا تُؤرشف أبدًا — السجل محفوظ */
-      const hasUsage = (entryId: string) =>
-        state.usages.some((u) => u.entryId === entryId && u.status !== "void");
-
-      const kept = new Set<string>();
-      const rebuilt: DayEntry[] = planned.map((row, index) => {
-        const existing = byPerson.get(row.personId);
-        if (!existing) {
-          return { ...row, dayId: day.id, orderIndex: index } as DayEntry;
-        }
-        kept.add(existing.id);
-        return {
-          ...existing,
-          orderIndex: index,
-          startTime: row.startTime,
-          endTime: row.endTime,
-          plannedMin: row.plannedMin,
-          role: row.role,
-          shareholderId: row.shareholderId,
-          rightId: row.rightId,
-        };
-      });
-
-      const outdated = current.filter((e) => !kept.has(e.id));
-      const toArchive = outdated.filter((e) => !hasUsage(e.id)).map((e) => e.id);
-
-      const next = {
-        ...state,
-        entries: [
-          ...state.entries.map((e) =>
-            toArchive.includes(e.id)
-              ? {
-                  ...e,
-                  archived: true,
-                  deletedAt: at,
-                  deletedBy: actor,
-                  deletionReason: action.correctionReason ?? "لم يعد في كشف الديالة",
-                }
-              : e
-          ),
-          ...rebuilt.filter((e) => !state.entries.some((x) => x.id === e.id)),
-        ],
-      };
-      const corrections = withCorrection(
-        state,
-        day.id,
-        "day",
-        day.id,
-        "roster",
-        current.length,
-        rebuilt.length,
-        action.correctionReason ?? "بدء الدوام الفعلي من كشف الديالة",
-        actor
-      );
-      return commit(state, { ...next, corrections }, {
-        action: "update",
-        entity: "day",
-        entityId: day.id,
-        summary: `بدء الدوام الفعلي ليوم ${isoToShort(day.date)} من كشف الديالة (${rebuilt.length} شخص)`,
-        reason: action.correctionReason,
-        actor,
-      });
-    }
-
     case "REMOVE_ENTRY": {
       const entry = state.entries.find((e) => e.id === action.id);
       if (!entry) return state;
@@ -1471,7 +1394,12 @@ function reducer(state: AppState, action: Action): AppState {
         transferEventId: null,
         dieselSettlement: action.dieselSettlement,
         dieselShortageLiters: Math.max(0, action.dieselShortageLiters || 0),
+        dieselPaidAmount: Math.max(0, Math.round(action.dieselPaidAmount ?? 0)),
         royaltyPayMode: action.royaltyPayMode,
+        royaltyCashAmount: Math.max(0, Math.round(action.royaltyCashAmount ?? 0)),
+        royaltyDeferredAmount: Math.max(0, Math.round(action.royaltyDeferredAmount ?? 0)),
+        shortfallReason: action.shortfallReason,
+        shortfallNote: action.shortfallNote ?? "",
         settlementNote: action.settlementNote,
         overCapacity,
         overCapacityReason: overCapacity ? action.overCapacityReason : "",
@@ -1508,7 +1436,7 @@ function reducer(state: AppState, action: Action): AppState {
         usage.id,
         "create",
         "",
-        `${action.startTime} → ${action.endTime} (${draft.minutes} دقيقة)`,
+        `${formatTimeRange(action.startTime, action.endTime)} (${draft.minutes} دقيقة)`,
         action.correctionReason ?? "",
         action.actor
       );
@@ -1516,7 +1444,7 @@ function reducer(state: AppState, action: Action): AppState {
         action: "create",
         entity: "usage",
         entityId: usage.id,
-        summary: `تسجيل استخدام فعلي: ${person?.name ?? ""} — ${action.startTime} → ${action.endTime} (${Math.round(draft.minutes)} دقيقة، ${draft.fuelLiters} لتر${draft.personalFuelPriceSnapshot > 0 ? ` بسعر المستخدم ${draft.personalFuelPriceSnapshot}` : ""}) · ديزل: ${dieselSettlementLabel(
+        summary: `تسجيل استخدام فعلي: ${person?.name ?? ""} — ${formatTimeRange(action.startTime, action.endTime)} (${Math.round(draft.minutes)} دقيقة، ${draft.fuelLiters} لتر${draft.personalFuelPriceSnapshot > 0 ? ` بسعر المستخدم ${draft.personalFuelPriceSnapshot}` : ""}) · ديزل: ${dieselSettlementLabel(
           usage.dieselSettlement
         )} · رواسة: ${royaltyModeLabel(usage.royaltyPayMode)}`,
         after: usage,
@@ -1551,7 +1479,19 @@ function reducer(state: AppState, action: Action): AppState {
         ...usage,
         dieselSettlement: action.dieselSettlement,
         dieselShortageLiters: Math.max(0, action.dieselShortageLiters || 0),
+        /* الحقول غير المُمرَّرة تبقى كما هي — فلا يفقد تعديلٌ تفصيلًا مسجَّلًا */
+        dieselPaidAmount: Math.max(0, Math.round(action.dieselPaidAmount ?? usage.dieselPaidAmount ?? 0)),
         royaltyPayMode: action.royaltyPayMode,
+        royaltyCashAmount: Math.max(
+          0,
+          Math.round(action.royaltyCashAmount ?? usage.royaltyCashAmount ?? 0)
+        ),
+        royaltyDeferredAmount: Math.max(
+          0,
+          Math.round(action.royaltyDeferredAmount ?? usage.royaltyDeferredAmount ?? 0)
+        ),
+        shortfallReason: action.shortfallReason ?? usage.shortfallReason,
+        shortfallNote: action.shortfallNote ?? usage.shortfallNote ?? "",
         settlementNote: action.settlementNote,
         updatedAt: new Date().toISOString(),
       };
@@ -1702,8 +1642,8 @@ function reducer(state: AppState, action: Action): AppState {
             "stoppage",
             action.stoppage.id,
             exists ? "edit" : "create",
-            before ? `${before.startTime} → ${before.endTime}` : "",
-            `${action.stoppage.startTime} → ${action.stoppage.endTime}`,
+            before ? formatTimeRange(before.startTime, before.endTime) : "",
+            formatTimeRange(action.stoppage.startTime, action.stoppage.endTime),
             action.correctionReason ?? action.stoppage.reason,
             action.actor ?? action.stoppage.createdBy
           )
@@ -1756,7 +1696,7 @@ function reducer(state: AppState, action: Action): AppState {
           entity: "stoppage",
           entityId: action.id,
           summary: `${action.archived ? "أرشفة (حذف ناعم — السجل محفوظ)" : "إعادة تفعيل"} توقف ${
-            before ? `${before.startTime} → ${before.endTime}` : ""
+            before ? formatTimeRange(before.startTime, before.endTime) : ""
           }`,
           before,
           reason: action.reason,
@@ -2594,14 +2534,6 @@ export interface AppActions {
     isNew: boolean,
     opts?: { correctionReason?: string; actor?: string }
   ) => void;
-  saveEntries: (
-    dayId: string,
-    entries: DayEntry[],
-    opts?: { correctionReason?: string; actor?: string }
-  ) => void;
-  moveEntry: (id: string, dir: -1 | 1) => void;
-  /** بدء الدوام الفعلي من كشف الديالة (لا يحذف أي صف فيه استخدام مسجّل) */
-  applyBaseRosterToDay: (dayId: string, opts?: { correctionReason?: string; actor?: string }) => void;
   /** كشف الدوام الأساسي: إضافة/تعديل نصيب شخص في كشف الديالة */
   saveBaseRosterMember: (
     roundId: string,
@@ -2633,7 +2565,15 @@ export interface AppActions {
     notes: string;
     dieselSettlement: DieselSettlement;
     dieselShortageLiters: number;
+    /** المبلغ المدفوع فعلًا من قيمة الديزل (0 = يُحسب من الحالة) */
+    dieselPaidAmount?: number;
     royaltyPayMode: RoyaltyPayMode;
+    /** عند «جزء نقد وجزء أجل»: المبلغ النقدي والآجل */
+    royaltyCashAmount?: number;
+    royaltyDeferredAmount?: number;
+    /** سبب نقص نصيب المشارك عن أساسه */
+    shortfallReason?: ShortfallReason;
+    shortfallNote?: string;
     settlementNote: string;
     overCapacityReason: string;
     personalFuelPrice?: number;
@@ -2646,7 +2586,12 @@ export interface AppActions {
     input: {
       dieselSettlement: DieselSettlement;
       dieselShortageLiters: number;
+      dieselPaidAmount?: number;
       royaltyPayMode: RoyaltyPayMode;
+      royaltyCashAmount?: number;
+      royaltyDeferredAmount?: number;
+      shortfallReason?: ShortfallReason;
+      shortfallNote?: string;
       settlementNote: string;
       reason: string;
       actor: string;
@@ -2754,14 +2699,24 @@ function readRawState(key: string): AppState | null {
   return null;
 }
 
+/** المضخة الرسمية التي يُربط بها هذا المخزن (من قائمة مضخات الحساب على الخادم) */
+export interface ServerPumpRef {
+  id: string;
+  pumpCode: string;
+  name: string;
+}
+
 export function AppProvider({
   children,
   storageKey = STORAGE_KEY,
   adoptName = "",
+  serverPump = null,
 }: {
   children: ReactNode;
   storageKey?: string;
   adoptName?: string;
+  /** مضخة مسجّلة على الخادم: المخزن يُربط بها مباشرة، فيعمل على أي جهاز */
+  serverPump?: ServerPumpRef | null;
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => loadInitial(storageKey, adoptName));
 
@@ -2786,115 +2741,155 @@ export function AppProvider({
   const serverPumpIdRef = useRef<string | null>(null);
   const versionRef = useRef(0);
   const migratedRef = useRef(false);
-  const firstRunRef = useRef(true);
   const skipPushRef = useRef(false);
   const pushTimer = useRef<number | null>(null);
-  const [syncState, setSyncState] = useState<"local" | "connecting" | "synced" | "offline">("local");
+  const [syncState, setSyncState] = useState<CloudSyncState>("local");
+  /** أحدث حالة معروضة — تُقرأ داخل المزامنة بلا إعادة تشغيل الربط مع كل تعديل */
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  /* ربط حالة الجهاز بمضخة الخادم + ترحيل البيانات المحلية مرة واحدة */
-  useEffect(() => {
-    const token = getToken();
-    const code = state.pump?.pumpCode;
-    if (!token || !code) {
-      setSyncState("local");
-      return;
-    }
-    let alive = true;
-    setSyncState("connecting");
-    (async () => {
-      const pumpId = await resolveServerPumpId(code);
-      if (!alive) return;
-      if (!pumpId) {
-        setSyncState("local");
-        return;
-      }
-      serverPumpIdRef.current = pumpId;
+  /** المضخة الرسمية على الخادم (من قائمة مضخات الحساب) — الربط بها لا برقم محلي */
+  const serverPumpId = serverPump?.id ?? null;
+
+  /**
+   * مطابقة بيانات الجهاز مع بيانات الخادم الرسمية — الخادم هو المصدر:
+   *  - بيانات على الخادم → تُنزَّل إلى هذا الجهاز (بنسخة احتياطية محلية قبل الاستبدال).
+   *  - بيانات محلية فقط → تُرفع إلى الخادم مرة واحدة (ترحيل آمن، بلا حذف أي شيء محلي).
+   *  - لا بيانات في الطرفين → الربط جاهز، وكل تعديل قادم يُرفع.
+   */
+  const reconcile = useCallback(
+    async (pumpId: string): Promise<boolean> => {
       const remote = await pullOperating(pumpId);
-      if (!alive) return;
       if (!remote) {
         setSyncState("offline");
-        return;
+        return false;
       }
+      const local = stateRef.current;
       versionRef.current = remote.meta.version;
-      const localHasData = Boolean(state.pump) && (state.rounds.length > 0 || state.days.length > 0);
-      const serverHasData =
-        Boolean(remote.settings) ||
-        remote.dialas.length > 0 ||
-        remote.roster.length > 0 ||
-        remote.days.length > 0 ||
-        remote.people.length > 0 ||
-        remote.entries.length > 0;
+
+      const localHasData = hasOperatingData(local);
+      const serverHasData = responseHasOperatingData(remote);
+      /* سجل مضخة أُنشئ على هذا الجهاز (معرّفه محلي لا معرّف الخادم) = إعدادات يملكها الجهاز */
+      const ownLocalPump = Boolean(local.pump && local.pump.id !== remote.pump.id);
 
       const backup = (reason: string) => {
-        if (!localHasData) return;
+        if (!hasOperatingData(local)) return;
         try {
           localStorage.setItem(
             `pump-org-backup-${reason}::${storageKey}`,
-            JSON.stringify({ at: new Date().toISOString(), reason, state })
+            JSON.stringify({ at: new Date().toISOString(), reason, state: local })
           );
         } catch {
           /* لا نُفشل المزامنة إن امتلأ التخزين */
         }
       };
 
-      if (!serverHasData && localHasData) {
+      if (!serverHasData && (localHasData || ownLocalPump)) {
         /* ترحيل آمن: نسخة احتياطية محلية أولًا، ثم الرفع، ثم علامة ترحيل — بلا حذف أي شيء */
         backup("phase2");
-        const meta = await pushOperating(pumpId, state, {
+        const withIdentity = applyServerPumpIdentity(local, remote);
+        const meta = await pushOperating(pumpId, withIdentity, {
           migration: true,
           version: remote.meta.version,
         });
-        if (!alive) return;
-        if (meta?.migratedAt) {
-          try {
-            localStorage.setItem(`pump-org-migrated::${pumpId}`, meta.migratedAt);
-          } catch {
-            /* ignore */
-          }
-          versionRef.current = meta.version;
-          migratedRef.current = true;
-          setSyncState("synced");
-        } else {
+        if (!meta?.migratedAt) {
           setSyncState("offline");
+          return false;
         }
-      } else if (serverHasData || remote.meta.migratedAt) {
+        try {
+          localStorage.setItem(`pump-org-migrated::${pumpId}`, meta.migratedAt);
+        } catch {
+          /* ignore */
+        }
+        versionRef.current = meta.version;
+        if (withIdentity !== local) {
+          skipPushRef.current = true;
+          dispatch({ type: "IMPORT", state: { ...withIdentity, version: 3 } });
+        }
+        migratedRef.current = true;
+        setSyncState("synced");
+        return true;
+      }
+
+      if (serverHasData || remote.meta.migratedAt) {
         /* الخادم رسمي: ننسخ الحالة الرسمية إلى هذا الجهاز (بنسخة احتياطية قبل الاستبدال) */
         backup("preimport");
-        const merged = applyPayload(state, remote);
+        const merged = applyPayload(applyServerPumpIdentity(local, remote), remote);
         skipPushRef.current = true;
         dispatch({ type: "IMPORT", state: { ...merged, version: 3 } });
         migratedRef.current = true;
         setSyncState("synced");
-      } else {
-        /* لا بيانات بعد على الخادم ولا محليًا: الاتصال جاهز وكل تعديل قادم سيُرفع */
-        migratedRef.current = true;
-        setSyncState("synced");
+        return true;
       }
-      firstRunRef.current = false;
+
+      /* لا بيانات بعد في الطرفين: المضخة مسجّلة على الخادم فيُبنى سجلها المحلي منها */
+      const withIdentity = applyServerPumpIdentity(local, remote);
+      if (withIdentity !== local) {
+        skipPushRef.current = true;
+        dispatch({ type: "IMPORT", state: { ...withIdentity, version: 3 } });
+      }
+      migratedRef.current = true;
+      setSyncState("synced");
+      return true;
+    },
+    [storageKey]
+  );
+
+  /* ربط هذا الجهاز بمضخة الخادم + ترحيل/تنزيل البيانات مرة واحدة عند الفتح */
+  useEffect(() => {
+    const token = getToken();
+    const code = stateRef.current.pump?.pumpCode;
+    /* مضخة الحساب من الخادم تكفي للربط — لا حاجة لبيانات محلية سابقة (جهاز جديد) */
+    if (!token || (!serverPumpId && !code)) {
+      setSyncState("local");
+      migratedRef.current = false;
+      return;
+    }
+    let alive = true;
+    serverPumpIdRef.current = null;
+    setSyncState("connecting");
+    (async () => {
+      const pumpId = serverPumpId ?? (await resolveServerPumpId(code as string));
+      if (!alive) return;
+      if (!pumpId) {
+        setSyncState("local");
+        return;
+      }
+      serverPumpIdRef.current = pumpId;
+      await reconcile(pumpId);
     })().catch(() => {
       if (alive) setSyncState("offline");
-      firstRunRef.current = false;
     });
     return () => {
       alive = false;
     };
-    // الربط يتم مرة واحدة عند فتح التطبيق أو تغيّر رقم تعريف المضخة
+    /* الربط يتم عند الفتح أو تغيّر المضخة — لا مع كل تعديل */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.pump?.pumpCode, storageKey]);
+  }, [serverPumpId, state.pump?.pumpCode, reconcile]);
 
   /* رفع التعديلات إلى الخادم بعد كل تغيير رسمي (بتأخير قصير) */
   useEffect(() => {
     const pumpId = serverPumpIdRef.current;
-    if (!pumpId || !migratedRef.current) return;
+    if (!pumpId) return;
+    if (!migratedRef.current) {
+      /* لم يكتمل الربط بعد: يُعاد قبل أي رفع حتى لا تُستبدل بيانات الخادم ببيانات جهاز قديمة */
+      if (pushTimer.current) window.clearTimeout(pushTimer.current);
+      pushTimer.current = window.setTimeout(() => {
+        void reconcile(pumpId);
+      }, 1500);
+      return () => {
+        if (pushTimer.current) window.clearTimeout(pushTimer.current);
+      };
+    }
     if (skipPushRef.current) {
-      /* التغيير جاء من تنزيل البيانات الرسمية — لا حاجة لإعادة رفعها */
+      /* التغيير جاء من تنزيل/ترحيل البيانات الرسمية — لا حاجة لإعادة رفعه */
       skipPushRef.current = false;
       return;
     }
     if (pushTimer.current) window.clearTimeout(pushTimer.current);
     setSyncState("connecting");
     pushTimer.current = window.setTimeout(async () => {
-      const meta = await pushOperating(pumpId, state, { version: versionRef.current });
+      const meta = await pushOperating(pumpId, stateRef.current, { version: versionRef.current });
       if (meta) {
         versionRef.current = meta.version;
         setSyncState("synced");
@@ -2906,7 +2901,7 @@ export function AppProvider({
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+  }, [state, reconcile]);
 
   /**
    * مزامنة التعارضات (§18): تُكتشف التعارضات وتُحفظ كسجلات مستقلة،
@@ -2952,11 +2947,6 @@ export function AppProvider({
       archiveRound: (id, archived, opts) => dispatch({ type: "ARCHIVE_ROUND", id, archived, ...opts }),
       saveEntry: (entry, isNew, opts) =>
         dispatch({ type: "SAVE_ENTRY", entry, isNew, ...opts }),
-      saveEntries: (dayId, entries, opts) =>
-        dispatch({ type: "SAVE_ENTRIES", dayId, entries, ...opts }),
-      moveEntry: (id, dir) => dispatch({ type: "MOVE_ENTRY", id, dir }),
-      applyBaseRosterToDay: (dayId, opts) =>
-        dispatch({ type: "APPLY_BASE_ROSTER_TO_DAY", dayId, ...opts }),
       saveBaseRosterMember: (roundId, personId, shareMin, opts) =>
         dispatch({ type: "SAVE_BASE_ROSTER_MEMBER", roundId, personId, shareMin, ...opts }),
       bulkAddBaseRoster: (roundId, items, actor) =>

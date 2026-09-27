@@ -1,3 +1,4 @@
+import { formatTimeAmPm } from "../domain/util";
 import {
   useEffect,
   type ButtonHTMLAttributes,
@@ -7,7 +8,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { X } from "lucide-react";
+import { Clock, X } from "lucide-react";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -25,14 +26,18 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   const base =
     "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none select-none";
+  /**
+   * الزرّ الأساسي بلون الهوية الكحلي — والأخضر يبقى للحالات الدالّة
+   * (مسدد · مكتمل · سليم) لا للأزرار.
+   */
   const variants: Record<ButtonVariant, string> = {
     primary:
-      "bg-gradient-to-l from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/20 hover:from-emerald-700 hover:to-emerald-600",
+      "bg-gradient-to-l from-brand-800 to-brand-600 text-white shadow-md shadow-brand-900/25 hover:from-brand-700 hover:to-brand-500",
     secondary:
-      "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
+      "bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100 dark:bg-brand-800/40 dark:text-sky-200 dark:border-brand-700/60 dark:hover:bg-brand-800/60",
     outline:
-      "bg-white text-gray-700 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700",
-    ghost: "bg-transparent text-gray-600 hover:bg-gray-100",
+      "bg-white text-gray-700 border border-gray-200 hover:border-sky-300 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:border-sky-700",
+    ghost: "bg-transparent text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700/60",
     danger: "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100",
   };
   return (
@@ -122,14 +127,38 @@ export function NumberInput({
   );
 }
 
-export function TimeInput(props: InputHTMLAttributes<HTMLInputElement>) {
+/**
+ * حقل الوقت: يظهر **بالعربية بصيغة 12 ساعة** دائمًا (`6:00 ص` · `6:30 م`)،
+ * والضغط عليه يفتح منتقي الوقت في الجهاز. القيمة تُخزَّن كما هي 24 ساعة (`HH:MM`).
+ */
+export function TimeInput({
+  className,
+  value,
+  onChange,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
+  const clock = typeof value === "string" && value ? formatTimeAmPm(value) : "—";
   return (
-    <input
-      type="time"
-      dir="ltr"
-      {...props}
-      className={cx(inputBase, "text-left", props.className)}
-    />
+    <div className={cx("relative", className)}>
+      <div
+        data-testid="time-ampm"
+        className={cx(
+          inputBase,
+          "flex items-center justify-between gap-2 text-right dark:bg-slate-700 dark:text-white"
+        )}
+      >
+        <span className="font-extrabold text-gray-800 dark:text-white">{clock}</span>
+        <Clock size={15} className="shrink-0 text-gray-300 dark:text-slate-400" />
+      </div>
+      <input
+        type="time"
+        dir="ltr"
+        value={value}
+        onChange={onChange}
+        className="absolute inset-0 h-full w-full cursor-pointer rounded-2xl opacity-0"
+        {...props}
+      />
+    </div>
   );
 }
 
@@ -145,7 +174,18 @@ export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 /* ------------------------------- Status pill -------------------------- */
 
-export type PillTone = "green" | "amber" | "red" | "gray" | "blue";
+export type PillTone =
+  | "green"
+  | "amber"
+  | "red"
+  | "gray"
+  | "blue"
+  | "cyan"
+  | "teal"
+  | "violet"
+  | "indigo"
+  | "rose"
+  | "orange";
 
 const pillTones: Record<PillTone, string> = {
   green: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -153,6 +193,41 @@ const pillTones: Record<PillTone, string> = {
   red: "bg-red-50 text-red-600 border-red-200",
   gray: "bg-gray-50 text-gray-500 border-gray-200",
   blue: "bg-sky-50 text-sky-700 border-sky-200",
+  cyan: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  teal: "bg-teal-50 text-teal-700 border-teal-200",
+  violet: "bg-violet-50 text-violet-700 border-violet-200",
+  indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  rose: "bg-rose-50 text-rose-700 border-rose-200",
+  orange: "bg-orange-50 text-orange-700 border-orange-200",
+};
+
+/* أيقونة ملوّنة داخل بطاقة إحصائية — لكل مؤشر لونه الخاص */
+const statChips: Record<PillTone, string> = {
+  green: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  red: "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300",
+  gray: "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-200",
+  blue: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  cyan: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+  teal: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
+  violet: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+  rose: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+  orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+};
+
+const statValues: Record<PillTone, string> = {
+  green: "text-emerald-700 dark:text-emerald-400",
+  amber: "text-amber-600 dark:text-amber-400",
+  red: "text-red-600 dark:text-red-400",
+  gray: "text-gray-800 dark:text-white",
+  blue: "text-sky-700 dark:text-sky-400",
+  cyan: "text-cyan-700 dark:text-cyan-400",
+  teal: "text-teal-700 dark:text-teal-400",
+  violet: "text-violet-700 dark:text-violet-400",
+  indigo: "text-indigo-700 dark:text-indigo-400",
+  rose: "text-rose-600 dark:text-rose-400",
+  orange: "text-orange-600 dark:text-orange-400",
 };
 
 export function Pill({
@@ -238,7 +313,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white/70 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-800/60">
-      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-brand-800/50 dark:text-sky-300">
         {icon}
       </div>
       <p className="text-base font-extrabold text-gray-800 dark:text-white">{title}</p>
@@ -267,23 +342,77 @@ export function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 dark:text-slate-400">
-        {icon ? <span className="text-emerald-500">{icon}</span> : null}
-        {label}
+      <div className="flex items-center gap-2">
+        {icon ? (
+          <span
+            className={cx(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-xl",
+              statChips[tone]
+            )}
+          >
+            {icon}
+          </span>
+        ) : null}
+        <span className="text-xs font-semibold text-gray-400 dark:text-slate-400">{label}</span>
       </div>
+      <div className={cx("mt-1.5 text-lg font-extrabold", statValues[tone])}>{value}</div>
+      {hint ? <div className="mt-0.5 text-xs text-gray-400 dark:text-slate-400">{hint}</div> : null}
+    </div>
+  );
+}
+
+/** سطر «تسمية / قيمة» صغير — يُستخدم في بطاقات التفاصيل والحسابات */
+export function MiniRow({
+  label,
+  value,
+  tone = "gray",
+}: {
+  label: string;
+  value: string;
+  tone?: "gray" | "green" | "amber" | "red";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-gray-400">{label}</span>
+      <span
+        className={cx(
+          "font-extrabold",
+          tone === "green" && "text-emerald-700 dark:text-emerald-300",
+          tone === "amber" && "text-amber-700 dark:text-amber-300",
+          tone === "red" && "text-red-600 dark:text-red-300",
+          tone === "gray" && "text-gray-800 dark:text-white"
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** خانة إحصاء صغيرة: تسمية وقيمة ملوّنة */
+export function MiniStat({
+  label,
+  value,
+  tone = "green",
+}: {
+  label: string;
+  value: string;
+  tone?: "green" | "red" | "amber" | "gray";
+}) {
+  return (
+    <div className="rounded-2xl bg-gray-50 px-2 py-2 dark:bg-slate-700">
+      <div className="text-[10px] font-bold text-gray-400">{label}</div>
       <div
         className={cx(
-          "mt-1 text-lg font-extrabold",
-          tone === "green" && "text-emerald-700 dark:text-emerald-400",
-          tone === "amber" && "text-amber-600 dark:text-amber-400",
+          "mt-0.5 text-xs font-extrabold",
+          tone === "green" && "text-emerald-700 dark:text-emerald-300",
           tone === "red" && "text-red-600 dark:text-red-400",
-          tone === "gray" && "text-gray-800 dark:text-white",
-          tone === "blue" && "text-sky-700 dark:text-sky-400"
+          tone === "amber" && "text-amber-600 dark:text-amber-400",
+          tone === "gray" && "text-gray-700 dark:text-slate-200"
         )}
       >
         {value}
       </div>
-      {hint ? <div className="mt-0.5 text-xs text-gray-400 dark:text-slate-400">{hint}</div> : null}
     </div>
   );
 }

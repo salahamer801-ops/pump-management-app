@@ -1,11 +1,27 @@
-export function formatMoneyYER(n: number): string {
-  const v = Math.round(n || 0);
-  const sign = v < 0 ? "-" : "";
-  return `${sign}${Math.abs(v).toLocaleString("en-US")} ر.ي`;
+import type { Currency } from "../domain/types";
+import { formatMoney, formatNumber } from "../format";
+import { formatTimeAmPm, formatTimeRange } from "../domain/util";
+
+export { formatNumber, formatTimeAmPm, formatTimeRange };
+
+/** أي كائن يحمل عملة (مضخة السجل الشخصي أو مضخة النظام الرسمي) */
+export interface CurrencyHolder {
+  currency?: Currency;
 }
 
-export function formatNumber(n: number): string {
-  return (n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+/** عملة السجل — تُقرأ من المضخة إن كانت معروفة، وإلا الريال اليمني */
+export function recordCurrency(source?: CurrencyHolder | null): Currency {
+  return source?.currency ?? "YER";
+}
+
+/** مبلغ بعملة المضخة (بلا تثبيت الريال اليمني) */
+export function formatMoneyFor(n: number, source?: CurrencyHolder | null): string {
+  return formatMoney(n, recordCurrency(source));
+}
+
+/** مبلغ بالريال اليمني — مُبقى للتوافق مع النداءات القديمة، ويُنفَّذ بمصدر واحد */
+export function formatMoneyYER(n: number): string {
+  return formatMoney(n, "YER");
 }
 
 export function formatLiters(n: number): string {
@@ -13,15 +29,7 @@ export function formatLiters(n: number): string {
   return `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })} لتر`;
 }
 
-/** الوقت بصيغة ص/م مثل: 06:00 ص */
-export function formatTimeAmPm(t: string): string {
-  if (!t) return "—";
-  const [h, m] = t.split(":").map(Number);
-  if (Number.isNaN(h)) return t;
-  const period = h < 12 ? "ص" : "م";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m ?? 0).padStart(2, "0")} ${period}`;
-}
+/** الوقت بصيغة ص/م — من طبقة المجال (مصدر واحد) */
 
 export function formatHours(n: number): string {
   return `${formatNumber(n)} ساعة`;

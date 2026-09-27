@@ -94,7 +94,7 @@ export default function PumpsScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-extrabold text-gray-900 dark:text-white">{p.name}</span>
-                    <span className="font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="font-mono text-[10px] font-bold text-sky-600 dark:text-sky-400">
                       {p.pumpCode}
                     </span>
                     <Pill tone={p.status === "active" ? "green" : "gray"}>

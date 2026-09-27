@@ -86,7 +86,7 @@ export default function AdminSettingsScreen() {
       ) : null}
 
       {/* الإعلان العام */}
-      <SectionCard title="إعلان عام للمستخدمين" hint="يظهر في أعلى التطبيق" actions={<Bell size={15} className="text-emerald-600" />}>
+      <SectionCard title="إعلان عام للمستخدمين" hint="يظهر في أعلى التطبيق" actions={<Bell size={15} className="text-sky-600 dark:text-sky-300" />}>
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="الحالة">
@@ -157,7 +157,7 @@ export default function AdminSettingsScreen() {
       </SectionCard>
 
       {/* التسجيل */}
-      <SectionCard title="إنشاء الحسابات" hint="شاشة الدخول" actions={<UserRoundCheck size={15} className="text-emerald-600" />}>
+      <SectionCard title="إنشاء الحسابات" hint="شاشة الدخول" actions={<UserRoundCheck size={15} className="text-sky-600 dark:text-sky-300" />}>
         <div className="grid gap-3 sm:grid-cols-2">
           <button
             type="button"
@@ -231,7 +231,7 @@ export default function AdminSettingsScreen() {
       </SectionCard>
 
       {/* مسؤولو النظام */}
-      <SectionCard title="مسؤولو النظام" hint={`${admins.length}`} actions={<ShieldCheck size={15} className="text-emerald-600" />}>
+      <SectionCard title="مسؤولو النظام" hint={`${admins.length}`} actions={<ShieldCheck size={15} className="text-sky-600 dark:text-sky-300" />}>
         <div className="space-y-2" data-testid="admin-admins-list">
           {admins.map((a) => (
             <div

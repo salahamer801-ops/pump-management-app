@@ -17,6 +17,7 @@ import { readManagerState, readUserLink } from "../domain/storage";
 import { formatDateTime } from "../format";
 import { tr } from "./i18n";
 import { cx, Modal, Pill } from "../components/ui";
+import { BrandLogo } from "../components/Brand";
 import HomeScreen from "./screens/HomeScreen";
 import PumpsScreen from "./screens/PumpsScreen";
 import CyclesScreen from "./screens/CyclesScreen";
@@ -102,9 +103,7 @@ function Shell({
       <header className="sticky top-0 z-30 border-b border-emerald-100/60 bg-white/80 backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-md shadow-emerald-600/20">
-              <Droplets size={18} />
-            </div>
+            <BrandLogo size={38} />
             <div>
               <div className="text-sm font-black leading-tight text-gray-900 dark:text-white">
                 {pumpName ?? t("مشروع تنظيم المضخات", "Pump Organization")}
@@ -112,7 +111,7 @@ function Shell({
               <div className="text-xs text-gray-400 dark:text-slate-400">
                 {state.profile.name || t("مساهم", "Member")}
                 {pumpCode ? (
-                  <span className="mr-1 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="mr-1 font-mono font-bold text-sky-600 dark:text-sky-400">
                     · {pumpCode}
                   </span>
                 ) : null}

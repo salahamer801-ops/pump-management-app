@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Check, Droplets, LogOut, Plus, ShieldCheck } from "lucide-react";
+import { Check, Droplets, LogOut, Plus } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../auth/api";
 import { createPump } from "../auth/pumpApi";
 import { Button, Card, Field, Pill, TextArea, TextInput, cx } from "../components/ui";
+import { BrandLogo } from "../components/Brand";
 
 /**
  * إنشاء/اختيار المضخة — الاسم هنا ليس مفتاحًا: المعرّف الثابت هو pumpCode (§11، §12).
@@ -46,12 +47,13 @@ export default function PumpGate({
   return (
     <div className="mx-auto max-w-lg space-y-4 px-4 py-6">
       <div className="text-center">
-        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-600/25">
-          <ShieldCheck size={30} />
+        <div className="mx-auto mb-3 flex justify-center">
+          <BrandLogo size={68} rounded="rounded-3xl" />
         </div>
-        <h1 className="text-2xl font-black text-gray-900">مضخاتك كمسؤول</h1>
+        <h1 className="text-2xl font-black text-gray-900">مفتاح المضخات</h1>
         <p className="mt-1 text-sm text-gray-500">
-          {user?.name} — كل مضخة لها رقم تعريف ثابت تشاركه مع من تريد السماح له بطلب الربط.
+          {user?.name} — إدارتك لمضخة واحدة، ومن هنا فقط يمكنك إنشاء مضخة أخرى والتبديل بينهما.
+          لكل مضخة رقم تعريف ثابت تشاركه مع من تريد السماح له بطلب الربط.
         </p>
       </div>
 
@@ -130,7 +132,7 @@ export default function PumpGate({
         </Card>
       ) : (
         <Button variant="outline" className="w-full" onClick={() => setCreating(true)}>
-          <Plus size={18} /> إضافة مضخة أخرى
+          <Plus size={18} /> إنشاء مضخة أخرى
         </Button>
       )}
 

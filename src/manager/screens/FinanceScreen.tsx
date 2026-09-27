@@ -49,7 +49,7 @@ import {
   transferTypeLabel,
   txKindLabel,
 } from "../../domain/rules";
-import { durationMin, formatDuration, isoToShort, sum, todayISO, uid } from "../../domain/util";
+import {durationMin, formatDuration, formatTimeRange, isoToShort, sum, todayISO, uid} from "../../domain/util";
 import { formatMoney, formatNumber } from "../../format";
 import {
   Button,
@@ -129,11 +129,11 @@ export default function FinanceScreen() {
       {tab === "accounts" ? (
         <Card className="p-4">
           <div className="mb-3 flex items-center gap-2">
-            <Wallet size={16} className="text-emerald-600" />
+            <Wallet size={16} className="text-sky-600 dark:text-sky-300" />
             <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">أرصدة الأشخاص</h2>
             <button
               onClick={() => setTxModal({ personId: null, kind: "payment" })}
-              className="mr-auto rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+              className="mr-auto rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
             >
               <Plus size={12} className="inline -mt-0.5" /> حركة مالية
             </button>
@@ -239,11 +239,11 @@ function FuelSection() {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Fuel size={16} className="text-emerald-600" />
+        <Fuel size={16} className="text-sky-600 dark:text-sky-300" />
         <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">سجل استهلاك الديزل</h2>
         <button
           onClick={() => setOpen(true)}
-          className="mr-auto rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+          className="mr-auto rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
         >
           <Plus size={12} className="inline -mt-0.5" /> تسجيل
         </button>
@@ -384,11 +384,11 @@ function OperatorSection() {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Tractor size={16} className="text-emerald-600" />
+        <Tractor size={16} className="text-sky-600 dark:text-sky-300" />
         <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">أجور الرواسة</h2>
         <button
           onClick={() => setOpen(true)}
-          className="mr-auto rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+          className="mr-auto rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
         >
           <Plus size={12} className="inline -mt-0.5" /> تسجيل
         </button>
@@ -428,7 +428,7 @@ function OperatorSection() {
                         {r.operatorName} — {isoToShort(r.date)}
                       </div>
                       <div className="text-[11px] text-gray-400">
-                        {r.startTime} → {r.endTime} · {formatDuration(r.minutes)} · {r.hourlyWage}/ساعة
+                        {formatTimeRange(r.startTime, r.endTime)} · {formatDuration(r.minutes)} · {r.hourlyWage}/ساعة
                       </div>
                     </div>
                     <div className="text-left text-[11px] font-bold">
@@ -661,11 +661,11 @@ function MoneySection() {
 
       <Card className="p-4" data-testid="payments-panel">
         <div className="mb-3 flex items-center gap-2">
-          <Banknote size={16} className="text-emerald-600" />
+          <Banknote size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">الدفعات (كل دفعة سجل مستقل)</h2>
           <button
             onClick={() => setPaymentOpen({ personId: null, debtId: null })}
-            className="mr-auto rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+            className="mr-auto rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
           >
             <Plus size={12} className="inline -mt-0.5" /> دفعة جديدة
           </button>

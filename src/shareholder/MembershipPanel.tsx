@@ -45,7 +45,7 @@ export default function MembershipPanel() {
   return (
     <Card className="space-y-3 p-4">
       <div className="flex items-center gap-2">
-        <KeyRound size={18} className="text-emerald-600" />
+        <KeyRound size={18} className="text-sky-600 dark:text-sky-300" />
         <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">مضخاتي المرتبطة بحسابي</h2>
       </div>
 

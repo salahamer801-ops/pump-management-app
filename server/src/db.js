@@ -390,6 +390,18 @@ CREATE TABLE IF NOT EXISTS actual_usages (
 );
 CREATE INDEX IF NOT EXISTS actual_usages_pump_idx ON actual_usages(pump_id);
 
+/*
+ * ترحيل غير مُتلِف (المرحلة الثانية): حقول التسديد المفصّلة.
+ * تُضاف بأعمدة وقيَم افتراضية، فلا تتأثّر أي بيانات قديمة، وتبقى payload كما هي.
+ */
+ALTER TABLE actual_usages ADD COLUMN IF NOT EXISTS diesel_paid_amount numeric NOT NULL DEFAULT 0;
+ALTER TABLE actual_usages ADD COLUMN IF NOT EXISTS royalty_cash_amount numeric NOT NULL DEFAULT 0;
+ALTER TABLE actual_usages ADD COLUMN IF NOT EXISTS royalty_deferred_amount numeric NOT NULL DEFAULT 0;
+ALTER TABLE actual_usages ADD COLUMN IF NOT EXISTS shortfall_reason text NOT NULL DEFAULT '';
+ALTER TABLE actual_usages ADD COLUMN IF NOT EXISTS shortfall_note text NOT NULL DEFAULT '';
+ALTER TABLE day_entries ADD COLUMN IF NOT EXISTS shortfall_reason text NOT NULL DEFAULT '';
+ALTER TABLE day_entries ADD COLUMN IF NOT EXISTS shortfall_note text NOT NULL DEFAULT '';
+
 /* التوقفات (عطل، مطر، وقود، طارئ …) */
 CREATE TABLE IF NOT EXISTS pump_stops (
   id text PRIMARY KEY,

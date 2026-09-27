@@ -44,7 +44,7 @@ import { formatNumber } from "../../format";
 import { Button, Card, EmptyState, Field, Modal, Pill, TextInput, cx } from "../../components/ui";
 import { AddDialaButton } from "../components/AddDialaModal";
 import BaseRosterPanel from "../components/BaseRosterPanel";
-import { DayStatusPill } from "./Dashboard";
+import { DayStatusPill } from "../../components/StatusPills";
 
 export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | null) => void }) {
   const { state, actions } = useApp();
@@ -64,7 +64,7 @@ export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | nu
     <div className="space-y-4">
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Layers size={16} className="text-emerald-600" />
+          <Layers size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">اليوم الحالي والقادم</h2>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -89,7 +89,7 @@ export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | nu
       {created ? (
         <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 dark:border-emerald-900/40 dark:bg-emerald-900/20">
           <div className="flex flex-wrap items-center gap-2">
-            <Sparkles size={16} className="text-emerald-600 dark:text-emerald-300" />
+            <Sparkles size={16} className="text-sky-600 dark:text-sky-300" />
             <span className="flex-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
               ديالة {created.round.number}: من {isoToShort(created.round.startDate)} إلى{" "}
               {isoToShort(created.round.endDate)} — {created.round.days} يوم (اليوم الأول … اليوم{" "}
@@ -116,7 +116,7 @@ export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | nu
             ) : (
               <button
                 onClick={() => actions.lockRound(created.round.id, "manager")}
-                className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white"
+                className="w-full rounded-xl bg-brand-700 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-brand-800"
               >
                 <ShieldCheck size={13} className="inline -mt-0.5" /> حفظ الديالة الآن حتى لا تُحذف أيامها بسهولة
               </button>
@@ -127,14 +127,14 @@ export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | nu
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Layers size={16} className="text-emerald-600" />
+          <Layers size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
             الديالات ({rounds.length})
           </h2>
           {archivedCount > 0 ? (
             <button
               onClick={() => setShowArchived((v) => !v)}
-              className="mr-auto text-[11px] font-bold text-emerald-600"
+              className="mr-auto text-[11px] font-bold text-sky-600 dark:text-sky-300"
             >
               {showArchived ? "إخفاء المؤرشفة" : `عرض المؤرشفة (${archivedCount})`}
             </button>
@@ -164,7 +164,7 @@ export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | nu
 
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <ListOrdered size={16} className="text-emerald-600" />
+          <ListOrdered size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">الجدول الأساسي (مرجعي)</h2>
           <span className="mr-auto text-[11px] text-gray-400">
             {activeShareholders(state, pump.id).length} مساهم · {formatNumber(units)} {pump.shareUnit} ·{" "}
@@ -378,7 +378,7 @@ function RoundCard({
         return (
           <div className="mt-3">
             <div className="mb-1 flex items-center gap-1.5 text-[11px] font-extrabold text-gray-700 dark:text-slate-200">
-              <ListOrdered size={13} className="text-emerald-600" /> تداول الديالة (النصيب مقابل الدوام الفعلي)
+              <ListOrdered size={13} className="text-sky-600 dark:text-sky-300" /> تداول الديالة (النصيب مقابل الدوام الفعلي)
             </div>
             <div className="space-y-1">
               {people.map((p) => (
@@ -425,7 +425,7 @@ function RoundCard({
           <button
             onClick={() => setLockOpen(true)}
             aria-label={`حفظ ديالة ${round.number}`}
-            className="rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white"
+            className="rounded-xl bg-brand-700 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-brand-800"
           >
             <ShieldCheck size={12} className="inline -mt-0.5" /> حفظ أيام الديالة ({days.length} يوم)
           </button>
@@ -579,7 +579,7 @@ function DayMini({
       className="rounded-2xl bg-emerald-50 px-3 py-3 text-right dark:bg-emerald-900/30"
     >
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-300">{label}</span>
+        <span className="text-[10px] font-bold text-sky-600 dark:text-sky-300">{label}</span>
         <DayStatusPill status={day.status} />
       </div>
       <div className="mt-1 text-xs font-extrabold text-emerald-800 dark:text-emerald-200">

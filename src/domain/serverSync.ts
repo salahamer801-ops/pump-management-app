@@ -183,10 +183,15 @@ export function payloadFromState(state: AppState): OperatingPayload {
       endTime: e.endTime,
       plannedMin: e.plannedMin,
       actualPersonId: e.actualPersonId ?? "",
+      /* رابط الاستخدام المسجّل لهذا الصف — بدونه يفقد الجهاز الجديد الربط */
+      usageId: e.usageId ?? "",
       status: e.status,
       postponeToDayId: e.postponeToDayId ?? "",
       reason: e.reason,
       notes: e.notes,
+      /* سبب نقص نصيب المشارك في هذا اليوم (يُحفظ على الصف نفسه) */
+      shortfallReason: e.shortfallReason ?? "",
+      shortfallNote: e.shortfallNote ?? "",
       entryType: entryKind(state, e),
     })),
     usages: state.usages.map((u) => ({
@@ -204,8 +209,30 @@ export function payloadFromState(state: AppState): OperatingPayload {
       fuelCost: u.fuelCost,
       royaltyAmountDue: u.royaltyAmountDue,
       stoppageMin: u.stoppageMin,
+      /* كل قيم العملية وقت التسجيل (Snapshot) — تُقرأ كما هي على أي جهاز */
+      rightHolderId: u.rightHolderId ?? "",
+      crossesMidnight: u.crossesMidnight,
+      fuelPerHourSnapshot: u.fuelPerHourSnapshot,
+      fuelPriceSnapshot: u.fuelPriceSnapshot,
+      personalFuelPriceSnapshot: u.personalFuelPriceSnapshot,
+      fuelAmountDue: u.fuelAmountDue,
+      royaltyHourlySnapshot: u.royaltyHourlySnapshot,
       dieselSettlement: u.dieselSettlement,
       dieselShortageLiters: u.dieselShortageLiters,
+      /* تفصيل التسديد: الديزل المدفوع فعلًا والرواسة نقدًا/أجلًا/جزئية */
+      dieselPaidAmount: u.dieselPaidAmount ?? 0,
+      royaltyPayMode: u.royaltyPayMode,
+      royaltyCashAmount: u.royaltyCashAmount ?? 0,
+      royaltyDeferredAmount: u.royaltyDeferredAmount ?? 0,
+      shortfallReason: u.shortfallReason ?? "",
+      shortfallNote: u.shortfallNote ?? "",
+      settlementNote: u.settlementNote,
+      notes: u.notes,
+      source: u.source,
+      status: u.status,
+      overCapacity: u.overCapacity,
+      overCapacityReason: u.overCapacityReason,
+      overCapacityMin: u.overCapacityMin,
     })),
     /* التوقفات (عطل/مطر/وقود/طارئ…) — بالكامل في payload، والأعمدة للاستعلام */
     stops: state.stoppages.map((x) => ({
@@ -407,13 +434,60 @@ export function applyPayload(state: AppState, payload: OperatingResponse | Opera
     fuelRecords: take(payload.fuelRecords, state.fuelRecords),
     operatorRecords: take(payload.operatorRecords, state.operatorRecords),
     personalRecords: take(payload.personalRecords, state.personalRecords),
-    payments: state.payments,
-    debts: state.debts,
-    transactions: state.transactions,
+    /* المالية و«الكيانات المحفوظة كما هي» تُستعاد على جهاز لا سجل فيه، ولا تُستبدل سجلًا قائمًا */
+    ...financeMerge(state, payload),
     auditLogs: state.auditLogs,
     settings: state.settings,
     counters: state.counters,
+    ...extraMerge(state, payload),
   };
+}
+
+/**
+ * الدفعات والديون والحركات المالية: تُستعاد من سجلات الخادم على جهاز لا سجل مالي فيه
+ * (جهاز جديد)، ولا تُستبدل سجلًا محليًا قائمًا — فالجهاز الذي أنشأ البيانات يحتفظ بها كاملة.
+ */
+function financeMerge(
+  state: AppState,
+  payload: OperatingPayload
+): Pick<AppState, "payments" | "debts" | "transactions"> {
+  const keepLocal = {
+    payments: state.payments,
+    debts: state.debts,
+    transactions: state.transactions,
+  };
+  if (state.payments.length > 0 || state.debts.length > 0 || state.transactions.length > 0) return keepLocal;
+  const fromServer = financeFromPayload(payload);
+  return {
+    payments: fromServer.payments.length > 0 ? fromServer.payments : state.payments,
+    debts: fromServer.debts.length > 0 ? fromServer.debts : state.debts,
+    transactions: fromServer.transactions.length > 0 ? fromServer.transactions : state.transactions,
+  };
+}
+
+/**
+ * كيانات تُحفظ على الخادم كما هي (حقوق، تسويات، تصحيحات، تعارضات، تحويلات، عدّادات):
+ * تُستعاد على جهاز خالٍ منها، ولا تلمس ما هو موجود على الجهاز.
+ */
+function extraMerge(state: AppState, payload: OperatingPayload): Partial<AppState> {
+  const extra = (payload as { extra?: Record<string, unknown> }).extra;
+  if (!extra || typeof extra !== "object") return {};
+  const out: Partial<AppState> = {};
+  const keys = ["rights", "settlements", "conflictAcks", "conflicts", "transferEvents", "corrections"] as const;
+  for (const key of keys) {
+    const local = state[key] as unknown;
+    const remote = extra[key];
+    if (Array.isArray(local) && local.length === 0 && Array.isArray(remote) && remote.length > 0) {
+      (out as Record<string, unknown>)[key] = remote;
+    }
+  }
+  const counters = extra.counters as AppState["counters"] | undefined;
+  if (counters && typeof counters === "object") {
+    if ((state.counters?.diala ?? 0) === 0 && (state.counters?.round ?? 0) === 0) {
+      out.counters = { diala: Number(counters.diala) || 0, round: Number(counters.round) || 0 };
+    }
+  }
+  return out;
 }
 
 /** يحوّل سجلات المضخة الرسمية (المالية) إلى الحالة المحلية عند الحاجة */
@@ -519,4 +593,60 @@ export function officialStateFromResponse(res: OperatingResponse): AppState {
     pump: pumpFromOfficial(res, res.pump.id, res.pump.name, res.pump.pumpCode),
   };
   return applyPayload(withPump, res);
+}
+
+/** مضخة مبنية من الرد الرسمي: الاسم ورقم التعريف من جدول المضخات، والإعدادات من الخادم */
+export function pumpFromOfficialResponse(res: OperatingResponse): Pump {
+  return pumpFromOfficial(res, res.pump.id, res.pump.name, res.pump.pumpCode);
+}
+
+/**
+ * تثبيت هوية المضخة الرسمية على الحالة المحلية:
+ *  - جهاز بلا سجل محلي (جهاز جديد): تُبنى المضخة من الخادم، فيفتح المسؤول تطبيقه
+ *    على أي جهاز ويجد مضخته وبياناتها بدل شاشة «تسجيل المضخة».
+ *  - جهاز له سجل محلي: يُثبَّت رقم التعريف الرسمي فقط، ولا يُغيَّر الاسم أو البيانات.
+ */
+export function applyServerPumpIdentity(state: AppState, res: OperatingResponse): AppState {
+  const official = pumpFromOfficialResponse(res);
+  if (!state.pump) return { ...state, pump: official };
+  if (state.pump.pumpCode === official.pumpCode) return state;
+  return { ...state, pump: { ...state.pump, pumpCode: official.pumpCode } };
+}
+
+/** هل تحمل الحالة بيانات تشغيل تستحق الرفع إلى الخادم؟ */
+export function hasOperatingData(state: AppState): boolean {
+  return Boolean(
+    state.pump &&
+      (state.rounds.length > 0 ||
+        state.days.length > 0 ||
+        state.entries.length > 0 ||
+        state.roster.length > 0 ||
+        state.persons.length > 0 ||
+        state.shareholders.length > 0 ||
+        state.usages.length > 0 ||
+        state.stoppages.length > 0 ||
+        state.fuelRecords.length > 0 ||
+        state.operatorRecords.length > 0 ||
+        state.personalRecords.length > 0 ||
+        state.payments.length > 0 ||
+        state.transactions.length > 0)
+  );
+}
+
+/** هل وصلت بيانات تشغيل رسمية من الخادم؟ */
+export function responseHasOperatingData(res: OperatingResponse): boolean {
+  return Boolean(
+    res.settings ||
+      res.dialas.length > 0 ||
+      res.roster.length > 0 ||
+      res.days.length > 0 ||
+      res.entries.length > 0 ||
+      res.people.length > 0 ||
+      res.shareholders.length > 0 ||
+      res.usages.length > 0 ||
+      res.stops.length > 0 ||
+      res.fuelRecords.length > 0 ||
+      res.operatorRecords.length > 0 ||
+      res.financeRecords.length > 0
+  );
 }

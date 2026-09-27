@@ -8,17 +8,30 @@ import {
   capacityBreakdown,
   computeUsageDraft,
   currentRight,
+  daySettlementTotals,
+  dayTimeline,
   debtStatusOf,
   detectConflicts,
+  dieselPaidPartOf,
+  fuelCostFor,
+  fuelLitersFor,
+  nextAvailableStart,
   overlapsFor,
+  royaltyCashPartOf,
+  royaltyDeferredPartOf,
+  scheduleConflicts,
+  settlementPostings,
   stoppageMinutesInRange,
   stoppageMinutesInRange as stoppageIn,
 } from "../src/domain/rules";
-import { durationMin, minutesToTime, timeToMinutes, todayISO, uid } from "../src/domain/util";
+import { durationMin, formatTimeAmPm, formatTimeRange, minutesToTime, timeToMinutes, todayISO, uid } from "../src/domain/util";
 import type {
   AppState,
+  BaseRosterMember,
   Debt,
   DialaDay,
+  DieselSettlement,
+  RoyaltyPayMode,
   DialaRound,
   Payment,
   Person,
@@ -160,9 +173,11 @@ const recordUsage = (state: AppState, input: Partial<Record<string, unknown>> = 
     startTime: (input.startTime as string) ?? "06:00",
     endTime: (input.endTime as string) ?? "09:00",
     notes: (input.notes as string) ?? "",
-    dieselSettlement: "unpaid",
-    dieselShortageLiters: 0,
-    royaltyPayMode: "credit",
+    dieselSettlement: (input.dieselSettlement as DieselSettlement) ?? "unpaid",
+    dieselShortageLiters: (input.dieselShortageLiters as number) ?? 0,
+    dieselPaidAmount: (input.dieselPaidAmount as number) ?? 0,
+    royaltyPayMode: (input.royaltyPayMode as RoyaltyPayMode) ?? "credit",
+    royaltyCashAmount: (input.royaltyCashAmount as number) ?? 0,
     settlementNote: "",
     overCapacityReason: "",
     personalFuelPrice: (input.personalFuelPrice as number) ?? 0,
@@ -543,6 +558,276 @@ check(
   corrected.corrections[0]
 );
 check("17ب) لم يُحذف أي سجل بعد التصحيح", corrected.usages.length === 1);
+
+/* ----------------- 18) الترتيب الزمني ومنع التعارض في المخزن ---------------- */
+
+/** صف مشارك في اليوم الفعلي */
+function mkEntry(id: string, personId: string, startTime: string, endTime: string) {
+  return {
+    id,
+    dayId: "day1",
+    pumpId: "pump1",
+    orderIndex: 0,
+    personId,
+    role: "shareholder" as const,
+    shareholderId: null,
+    rightId: null,
+    startTime,
+    endTime,
+    plannedMin: durationMin(startTime, endTime),
+    actualPersonId: null,
+    usageId: null,
+    status: "planned" as const,
+    postponeToDayId: null,
+    reason: "",
+    notes: "",
+    createdAt: new Date().toISOString(),
+    createdBy: "manager",
+    archived: false,
+  };
+}
+
+const first = reducerForTests(daily.state, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: mkEntry("e1", daily.people[0].id, "06:00", "09:00"),
+});
+check("18) صف مشارك داخل نافذة التشغيل يُقبل", first.entries.length === 1, first.entries.length);
+
+const overlapped = reducerForTests(first, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: mkEntry("e2", daily.people[1].id, "08:00", "11:00"),
+});
+check(
+  "18ب) صف متداخل مع مشارك آخر يُرفض ولا يُحفظ",
+  overlapped.entries.length === 1 && !overlapped.entries.some((e) => e.id === "e2"),
+  overlapped.entries.length
+);
+
+const outsideWindow = reducerForTests(first, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: mkEntry("e3", daily.people[1].id, "03:00", "05:00"),
+});
+check(
+  "18ج) صف خارج نافذة تشغيل اليوم يُرفض",
+  outsideWindow.entries.length === 1 && !outsideWindow.entries.some((e) => e.id === "e3")
+);
+
+const zeroSpan = reducerForTests(first, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: { ...mkEntry("e4", daily.people[1].id, "", ""), plannedMin: 0 },
+});
+check("18د) صف بمدة صفرية يُرفض", zeroSpan.entries.length === 1);
+
+const second = reducerForTests(first, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: mkEntry("e5", daily.people[2].id, "09:00", "12:00"),
+});
+check("19) الصف التالي يبدأ من نهاية المشارك السابق", second.entries.length === 2);
+check(
+  "19ب) البداية المقترحة = نهاية آخر مشارك (12:00)",
+  nextAvailableStart(second, second.days[0], second.pump!) === "12:00",
+  nextAvailableStart(second, second.days[0], second.pump!)
+);
+
+const timeline = dayTimeline(second, second.days[0], second.pump!);
+check(
+  "19ج) الشريط الزمني: الموزَّع 360 دقيقة والمتبقي 840",
+  timeline.distributedMin === 360 && timeline.remainingMin === 840,
+  { distributed: timeline.distributedMin, remaining: timeline.remainingMin }
+);
+check(
+  "19د) الفراغ الزمني القادم يبدأ من 12:00",
+  timeline.nextGap?.startTime === "12:00",
+  timeline.nextGap
+);
+check(
+  "19هـ) الصفوف مرتبة زمنيًا (لا ترتيب يدوي)",
+  second.entries.length === 2 && second.entries[0].startTime === "06:00"
+);
+
+const conflicts = scheduleConflicts(second, second.days[0], second.pump!, {
+  startTime: "07:00",
+  endTime: "10:00",
+  personId: daily.people[1].id,
+});
+check(
+  "19و) محرّك التعارض يعطي تداخلًا مع وقت بديل مقترح",
+  conflicts.some((c) => c.kind === "overlap" && c.suggestedStart === "09:00") ||
+    conflicts.some((c) => c.kind === "overlap" && Boolean(c.suggestedStart)),
+  conflicts.map((c) => `${c.kind}:${c.message}`)
+);
+
+/* ------------------ 20) لا حجز تلقائي لساعات اليوم من الكشف --------------- */
+
+const withRoster: AppState = {
+  ...daily.state,
+  rounds: [
+    {
+      ...daily.state.rounds[0],
+      id: "r1",
+      pumpId: "pump1",
+      number: 1,
+      startDate: today,
+      endDate: today,
+      days: 5,
+      locked: false,
+      rosterLocked: false,
+      status: "open",
+      notes: "",
+      archived: false,
+    },
+  ],
+  roster: [
+    {
+      id: "rm1",
+      pumpId: "pump1",
+      roundId: "r1",
+      personId: daily.people[0].id,
+      shareMin: 180,
+      order: 0,
+      role: "shareholder",
+      notes: "",
+      archived: false,
+      createdAt: new Date().toISOString(),
+      createdBy: "manager",
+    },
+    {
+      id: "rm2",
+      pumpId: "pump1",
+      roundId: "r1",
+      personId: daily.people[1].id,
+      shareMin: 180,
+      order: 1,
+      role: "shareholder",
+      notes: "",
+      archived: false,
+      createdAt: new Date().toISOString(),
+      createdBy: "manager",
+    },
+  ] as BaseRosterMember[],
+};
+const createdDay = reducerForTests(withRoster, {
+  type: "CREATE_DAY",
+  planFromSchedule: true,
+  day: { ...daily.state.days[0], id: "day9", date: today, roundId: "r1" },
+  entries: [],
+});
+check(
+  "20) إنشاء يوم جديد لا يبني أي صف تلقائيًا من كشف الديالة",
+  createdDay.entries.filter((e) => e.dayId === "day9").length === 0,
+  createdDay.entries.length
+);
+
+/* ------------------- 21) الرواسة الجزئية والديزل المدفوع ------------------ */
+
+const feeState: AppState = {
+  ...daily.state,
+  pump: {
+    ...daily.state.pump!,
+    royaltyEnabled: true,
+    royaltyMode: "hour",
+    royaltyPerHour: 2000,
+  },
+};
+const partialState = recordUsage(feeState, {
+  personId: daily.people[0].id,
+  startTime: "06:00",
+  endTime: "09:00",
+  dieselSettlement: "shortage",
+  dieselShortageLiters: 10,
+  royaltyPayMode: "partial",
+  royaltyCashAmount: 3000,
+});
+const partialUsage = partialState.usages[partialState.usages.length - 1];
+check(
+  "21) الرواسة الجزئية: نقد 3000 والآجل 3000 من أصل 6000",
+  royaltyCashPartOf(partialUsage) === 3000 && royaltyDeferredPartOf(partialUsage) === 3000,
+  { cash: royaltyCashPartOf(partialUsage), deferred: royaltyDeferredPartOf(partialUsage) }
+);
+const partialPostings = settlementPostings(partialUsage);
+check(
+  "21ب) الحركات: استحقاق رواسة كامل + سداد الجزء النقدي فقط",
+  partialPostings.filter((x) => x.kind === "royalty").length === 1 &&
+    partialPostings.some((x) => x.kind === "payment" && x.amount === 3000),
+  partialPostings.map((x) => `${x.kind}/${x.direction}/${x.amount}`)
+);
+check(
+  "21ج) الديزل الناقص: استحقاق كامل + سداد الباقي (10 لتر × 1200 نقصًا)",
+  partialUsage.dieselSettlement === "shortage" &&
+    dieselPaidPartOf(partialUsage) === Math.round(partialUsage.fuelAmountDue) - 10 * 1200,
+  { paid: dieselPaidPartOf(partialUsage), due: partialUsage.fuelAmountDue }
+);
+const totals = daySettlementTotals(partialState, "day1");
+check(
+  "21د) ملخص اليوم يعدّ الرواسة الجزئية نقدًا وآجلًا معًا",
+  totals.partialCount === 1 && totals.royaltyCash === 3000 && totals.royaltyCredit === 3000,
+  { partial: totals.partialCount, cash: totals.royaltyCash, credit: totals.royaltyCredit }
+);
+
+const editedSettlement = reducerForTests(partialState, {
+  type: "SET_USAGE_SETTLEMENT",
+  usageId: partialUsage.id,
+  dieselSettlement: "shortage",
+  dieselShortageLiters: 10,
+  royaltyPayMode: "partial",
+  settlementNote: "تعديل سرعة الديزل",
+  reason: "اختبار",
+  actor: "manager",
+});
+const kept = editedSettlement.usages.find((u) => u.id === partialUsage.id)!;
+check(
+  "21هـ) تعديل التسديد لا يُفقد الجزء النقدي المسجَّل",
+  kept.royaltyCashAmount === 3000 && kept.royaltyPayMode === "partial",
+  { cash: kept.royaltyCashAmount, mode: kept.royaltyPayMode }
+);
+
+/* --------------------- 22) معادلة الوقود مصدر واحد ----------------------- */
+
+check(
+  "22) معادلة الوقود: 3 ساعات × 10 لتر/ساعة = 30 لتر = 36000 بسعر 1200",
+  fuelLitersFor(180, { energyType: "diesel", fuelCalcMode: "hour", fuelConsumptionPerHour: 10 }) === 30 &&
+    fuelCostFor(30, 1200) === 36000
+);
+check(
+  "22ب) المضخة الشمسية بلا وقود",
+  fuelLitersFor(180, { energyType: "solar", fuelConsumptionPerHour: 10 }) === 0
+);
+
+/* ---------------------- 23) الوقت بصيغة 12 ساعة (ص/م) ------------------- */
+
+check(
+  "23) الصباح والظهر والعصر بصيغة ص/م",
+  formatTimeAmPm("06:00") === "6:00 ص" &&
+    formatTimeAmPm("15:30") === "3:30 م" &&
+    formatTimeAmPm("09:05") === "9:05 ص",
+  [formatTimeAmPm("06:00"), formatTimeAmPm("15:30"), formatTimeAmPm("09:05")]
+);
+check(
+  "23ب) منتصف الليل والظهر يُكتبان 12 لا 0",
+  formatTimeAmPm("00:00") === "12:00 ص" && formatTimeAmPm("12:00") === "12:00 م",
+  [formatTimeAmPm("00:00"), formatTimeAmPm("12:00")]
+);
+check(
+  "23ج) نافذة تشغيل تعبر منتصف الليل: 6:00 ص → 2:00 ص",
+  `${formatTimeAmPm("06:00")} → ${formatTimeAmPm("02:00")}` === "6:00 ص → 2:00 ص"
+);
+check("23د) وقت فارغ يُعرض شرطة", formatTimeAmPm("") === "—");
+
+check(
+  "23هـ) النطاق الزمني يُكتب من اليمين إلى اليسار (الأول على اليمين)",
+  formatTimeRange("06:00", "09:00") === "6:00 ص ← 9:00 ص" &&
+    formatTimeRange("06:00", "18:00") === "6:00 ص ← 6:00 م",
+  [formatTimeRange("06:00", "09:00"), formatTimeRange("06:00", "18:00")]
+);
+check(
+  "23و) نطاق يعبر منتصف الليل: 6:00 ص ← 2:00 ص",
+  formatTimeRange("06:00", "02:00") === "6:00 ص ← 2:00 ص"
+);
 
 console.log(`\n${passed} ناجح · ${failed} فاشل`);
 if (failed > 0) process.exit(1);

@@ -36,11 +36,6 @@ export function durationMin(start: string, end: string): number {
   return d;
 }
 
-/** المدة الصريحة (قد تكون سالبة) — للتحقق من الأخطاء */
-export function rawDurationMin(start: string, end: string): number {
-  return timeToMinutes(end) - timeToMinutes(start);
-}
-
 export function formatDuration(min: number): string {
   const total = Math.round(min || 0);
   const sign = total < 0 ? "-" : "";
@@ -55,27 +50,6 @@ export function formatDuration(min: number): string {
 
 export function toHours(min: number): number {
   return Math.round(((min || 0) / 60) * 100) / 100;
-}
-
-/** ترتيب فترتين زمنيتين: [بداية، نهاية] بالدقائق من بداية النهار مع تمديد العبور */
-export function timeInterval(
-  start: string,
-  end: string,
-  anchorMin = 0
-): { from: number; to: number } {
-  let from = timeToMinutes(start);
-  let to = timeToMinutes(end);
-  if (to <= from) to += 1440;
-  // نُقرّب الفترة إلى نفس نافذة اليوم إن أمكن
-  while (from - 1440 >= anchorMin) {
-    from -= 1440;
-    to -= 1440;
-  }
-  while (from < anchorMin - 720) {
-    from += 1440;
-    to += 1440;
-  }
-  return { from, to };
 }
 
 export function rangesOverlap(
@@ -137,6 +111,19 @@ export function isoToShort(iso: string): string {
   }
 }
 
+/** «27 سبتمبر» — اليوم والشهر بلا سنة (لبطاقات السابق/التالي الصغيرة) */
+export function isoToDayMonth(iso: string): string {
+  if (!iso) return "—";
+  try {
+    return parseISODate(iso).toLocaleDateString("ar", {
+      day: "numeric",
+      month: "long",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function isoToWeekday(iso: string): string {
   if (!iso) return "—";
   try {
@@ -158,6 +145,29 @@ export function hijriDate(iso?: string): string {
   } catch {
     return "—";
   }
+}
+
+/**
+ * الوقت بصيغة 12 ساعة بالعربية: `6:00 ص` · `6:30 م` · `12:00 م`.
+ * مصدر واحد لكل الشاشات (لوحة المسؤول وسجل المساهم معًا).
+ */
+export function formatTimeAmPm(t: string): string {
+  if (!t) return "—";
+  const parts = t.split(":");
+  const h = Number(parts[0]);
+  if (Number.isNaN(h)) return t;
+  const m = Number(parts[1] ?? 0);
+  const period = h < 12 ? "ص" : "م";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(Number.isNaN(m) ? 0 : m).padStart(2, "0")} ${period}`;
+}
+
+/**
+ * نطاق زمني عربي **من اليمين إلى اليسار**: `6:00 ص ← 9:00 ص`
+ * (الأول على اليمين، والسهم يشير إلى الثاني في اتجاه القراءة العربية).
+ */
+export function formatTimeRange(start: string, end: string): string {
+  return `${formatTimeAmPm(start)} ← ${formatTimeAmPm(end)}`;
 }
 
 export function formatClock(iso: string): string {

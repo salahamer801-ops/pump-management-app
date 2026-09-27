@@ -5,16 +5,17 @@
 @theme {
   --font-sans: "Cairo", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Tahoma, sans-serif;
-  --color-brand-50: #ecfdf5;
-  --color-brand-100: #d1fae5;
-  --color-brand-200: #a7f3d0;
-  --color-brand-300: #6ee7b7;
-  --color-brand-400: #34d399;
-  --color-brand-500: #10b981;
-  --color-brand-600: #059669;
-  --color-brand-700: #047857;
-  --color-brand-800: #065f46;
-  --color-brand-900: #064e3b;
+  /* هوية التطبيق: الكحلي مستخرج من الشعار نفسه */
+  --color-brand-50: #eef4fb;
+  --color-brand-100: #d9e7f5;
+  --color-brand-200: #b4cfe9;
+  --color-brand-300: #7eaad3;
+  --color-brand-400: #4a80b6;
+  --color-brand-500: #23598c;
+  --color-brand-600: #0d4270;
+  --color-brand-700: #032a4c;
+  --color-brand-800: #02223d;
+  --color-brand-900: #011a2f;
 }
 
 html {
@@ -24,14 +25,24 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 40%, #ffffff 100%);
+  /* خلفية متعددة الدرجات (أزرق/بنفسجي/سماوي) بدل الأخضر الأحادي */
+  background:
+    radial-gradient(55rem 26rem at 105% -8%, #dcebff 0%, rgba(220, 235, 255, 0) 62%),
+    radial-gradient(45rem 24rem at -12% 2%, #e8e2ff 0%, rgba(232, 226, 255, 0) 58%),
+    radial-gradient(40rem 22rem at 50% 108%, #d8f6f1 0%, rgba(216, 246, 241, 0) 60%),
+    linear-gradient(180deg, #f6f9ff 0%, #ffffff 45%, #ffffff 100%);
+  background-attachment: fixed;
   color: #1f2937;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
 .dark body {
-  background: linear-gradient(180deg, #0f172a 0%, #0b1220 60%, #0b1220 100%);
+  background:
+    radial-gradient(50rem 24rem at 105% -8%, #10294a 0%, rgba(16, 41, 74, 0) 60%),
+    radial-gradient(42rem 22rem at -12% 2%, #1e1b45 0%, rgba(30, 27, 69, 0) 58%),
+    linear-gradient(180deg, #0e1526 0%, #0b1220 60%, #0b1220 100%);
+  background-attachment: fixed;
   color: #e2e8f0;
 }
 

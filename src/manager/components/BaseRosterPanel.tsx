@@ -32,7 +32,7 @@ import {
   type BaseRosterRow,
 } from "../../domain/rules";
 import type { DialaRound, EntryRole, Person } from "../../domain/types";
-import { formatDuration, toHours, todayISO, uid } from "../../domain/util";
+import {formatDuration, formatTimeRange, todayISO, toHours, uid} from "../../domain/util";
 import { Button, Field, Modal, NumberInput, Pill, Select, TextArea, TextInput, cx } from "../../components/ui";
 import { roleLabel } from "../../components/PersonPicker";
 
@@ -296,7 +296,7 @@ export default function BaseRosterPanel({
   return (
     <div className="mt-2 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10">
       <div className="flex flex-wrap items-center gap-2">
-        <UsersRound size={15} className="text-emerald-600" />
+        <UsersRound size={15} className="text-sky-600 dark:text-sky-300" />
         <span className="text-xs font-extrabold text-gray-800 dark:text-white">كشف الدوام الأساسي</span>
         {locked ? (
           <Pill tone="green">
@@ -422,7 +422,9 @@ export default function BaseRosterPanel({
                     </span>
                     <span className="block text-[10px] text-gray-400">
                       {row.phone || "لا يوجد رقم"} · {roleLabel(row.role)} ·{" "}
-                      {row.startTime && row.endTime ? `${row.startTime} → ${row.endTime}` : "—"}
+                      {row.startTime && row.endTime
+                        ? formatTimeRange(row.startTime, row.endTime)
+                        : "—"}
                     </span>
                   </span>
                   <ShareCell
@@ -549,7 +551,7 @@ export default function BaseRosterPanel({
                   >
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-emerald-600"
+                      className="h-4 w-4 accent-sky-600"
                       checked={selected}
                       onChange={(e) => {
                         setPicked((prev) => {

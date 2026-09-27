@@ -28,12 +28,21 @@ export default function PersonPicker({
   pumpId,
   onSelect,
   title = "إضافة شخص",
+  priorityIds,
+  hintFor,
+  priorityLabel = "من كشف الديالة",
 }: {
   open: boolean;
   onClose: () => void;
   pumpId: string;
   onSelect: (person: Person, role: EntryRole) => void;
   title?: string;
+  /** معرّفات تُقدَّم في أول الاقتراحات (كشف الديالة) بترتيبها */
+  priorityIds?: string[];
+  /** سطر إضافي لكل شخص (نصيبه ورقمه مثلًا) */
+  hintFor?: (person: Person) => string | null;
+  /** وسم يميّز أصحاب الأولوية */
+  priorityLabel?: string;
 }) {
   const { state, actions } = useApp();
   const [query, setQuery] = useState("");
@@ -43,10 +52,22 @@ export default function PersonPicker({
   const [notes, setNotes] = useState("");
   const [role, setRole] = useState<EntryRole>("shareholder");
 
-  const suggestions = useMemo(
-    () => (open ? suggestPeople(state, pumpId, query, 60) : []),
-    [open, state, pumpId, query]
-  );
+  const suggestions = useMemo(() => {
+    if (!open) return [];
+    const list = suggestPeople(state, pumpId, query, 60);
+    if (!priorityIds || priorityIds.length === 0) return list;
+    const rank = new Map(priorityIds.map((id, i) => [id, i]));
+    /* الترتيب: كشف الديالة أولًا (بترتيبه) ثم بقية الاقتراحات بترتيبها الذكي */
+    return list
+      .slice()
+      .sort((a, b) => {
+        const ra = rank.has(a.person.id) ? rank.get(a.person.id)! : Number.MAX_SAFE_INTEGER;
+        const rb = rank.has(b.person.id) ? rank.get(b.person.id)! : Number.MAX_SAFE_INTEGER;
+        return ra - rb || a.tier - b.tier || a.person.name.localeCompare(b.person.name);
+      });
+  }, [open, state, pumpId, query, priorityIds]);
+
+  const prioritySet = useMemo(() => new Set(priorityIds ?? []), [priorityIds]);
 
   const reset = () => {
     setQuery("");
@@ -122,10 +143,12 @@ export default function PersonPicker({
                       {s.person.name}
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-gray-400">
-                      {s.person.phone ? `${s.person.phone} · ` : ""}
-                      {tierLabel(s.tier)} · {s.tags.join(" / ")}
+                      {hintFor?.(s.person)
+                        ? hintFor(s.person)
+                        : `${s.person.phone ? `${s.person.phone} · ` : ""}${tierLabel(s.tier)} · ${s.tags.join(" / ")}`}
                     </span>
                   </span>
+                  {prioritySet.has(s.person.id) ? <Pill tone="blue">{priorityLabel}</Pill> : null}
                   {s.person.guest ? <Pill tone="gray">ضيف</Pill> : null}
                 </button>
               ))

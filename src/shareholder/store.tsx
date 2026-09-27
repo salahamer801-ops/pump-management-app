@@ -1,3 +1,4 @@
+import { formatTimeRange } from "../domain/util";
 import {
   createContext,
   useContext,
@@ -50,7 +51,7 @@ function log(
 }
 
 const turnText = (t: ShareholderTurn) =>
-  `${t.date} (اليوم ${t.dayIndex}) · ${t.startTime}→${t.endTime} · ${t.hours} ساعة`;
+  `${t.date} (اليوم ${t.dayIndex}) · ${formatTimeRange(t.startTime, t.endTime)} · ${t.hours} ساعة`;
 const contributorText = (c: DayContributor) =>
   `${c.name} · اليوم ${c.dayIndex} · ${c.hours} ساعة`;
 
@@ -151,7 +152,7 @@ function reducer(state: ShareholderState, action: Action): ShareholderState {
         ),
         history: log(
           state,
-          `تعديل دور ${action.turn.date}: ${before ? `${before.hours} ساعة → ` : ""}${action.turn.hours} ساعة`
+          `تعديل دور ${action.turn.date}: ${before ? `${before.hours} ساعة ← ` : ""}${action.turn.hours} ساعة`
         ),
       };
     }

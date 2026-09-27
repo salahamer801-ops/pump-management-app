@@ -57,6 +57,7 @@ import {
   TextInput,
   TimeInput,
   cx,
+  MiniRow,
 } from "../../components/ui";
 import PersonPicker from "../../components/PersonPicker";
 
@@ -102,7 +103,7 @@ export default function ReportsScreen() {
       {tab === "reports" ? (
         <>
           <Card className="flex items-center gap-2 p-3">
-            <FileSpreadsheet size={16} className="text-emerald-600" />
+            <FileSpreadsheet size={16} className="text-sky-600 dark:text-sky-300" />
             <Select value={month} onChange={(e) => setMonth(e.target.value)} className="flex-1">
               {months.map((m) => (
                 <option key={m} value={m}>
@@ -161,7 +162,7 @@ function MonthlyReport({ month }: { month: string }) {
     <div className="space-y-4">
       <Card className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <BarChart3 size={16} className="text-emerald-600" />
+          <BarChart3 size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">ملخص {monthLabel(month)}</h2>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center">
@@ -205,7 +206,7 @@ function MonthlyReport({ month }: { month: string }) {
 
       <Card className="p-4">
         <h2 className="mb-2 flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-          <CalendarDays size={15} className="text-emerald-600" /> تفصيل الأيام
+          <CalendarDays size={15} className="text-sky-600 dark:text-sky-300" /> تفصيل الأيام
         </h2>
         {data.days.length === 0 ? (
           <p className="py-3 text-center text-xs text-gray-400">لا توجد أيام في هذا الشهر.</p>
@@ -236,7 +237,7 @@ function MonthlyReport({ month }: { month: string }) {
 
       <Card className="p-4">
         <h2 className="mb-2 flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-          <Timer size={15} className="text-emerald-600" /> المساهمون الأساسيون (مرجع)
+          <Timer size={15} className="text-sky-600 dark:text-sky-300" /> كشف مساهمي الديالة (مرجع)
         </h2>
         <div className="space-y-1 text-[11px]">
           {scheduleRows(state, pump).map((row, i) => (
@@ -257,7 +258,7 @@ function MonthlyReport({ month }: { month: string }) {
       {data.stoppages.length > 0 ? (
         <Card className="p-4">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-white">
-            <Wrench size={15} className="text-emerald-600" /> التوقفات
+            <Wrench size={15} className="text-sky-600 dark:text-sky-300" /> التوقفات
           </h2>
           <div className="space-y-1 text-[11px]">
             {data.stoppages.map((s) => (
@@ -326,7 +327,7 @@ function DifferencesTab() {
     <div className="space-y-4">
       <Card className="p-4" data-testid="conflicts-panel">
         <div className="flex items-center gap-2">
-          <Scale size={16} className="text-emerald-600" />
+          <Scale size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
             السجل الرسمي مقابل السجل الشخصي
           </h2>
@@ -507,11 +508,11 @@ function ConflictResolveModal({
     <Modal open onClose={onClose} title={`مراجعة تعارض — ${conflictTypeLabel(conflict.type)}`}>
       <div className="space-y-3">
         <div className="rounded-2xl bg-gray-50 px-3 py-3 text-[11px] dark:bg-slate-700">
-          <Row label="السجل الرسمي" value={conflict.officialValue || "—"} />
-          <Row label="السجل الشخصي" value={conflict.personalValue || "—"} />
-          <Row label="الفرق" value={conflict.difference} tone="amber" />
-          <Row label="تاريخ الكشف" value={formatClock(conflict.createdAt)} />
-          {conflict.personId ? <Row label="الشخص" value={personName(state, conflict.personId)} /> : null}
+          <MiniRow label="السجل الرسمي" value={conflict.officialValue || "—"} />
+          <MiniRow label="السجل الشخصي" value={conflict.personalValue || "—"} />
+          <MiniRow label="الفرق" value={conflict.difference} tone="amber" />
+          <MiniRow label="تاريخ الكشف" value={formatClock(conflict.createdAt)} />
+          {conflict.personId ? <MiniRow label="الشخص" value={personName(state, conflict.personId)} /> : null}
         </div>
 
         <Field label="الحالة">
@@ -593,7 +594,7 @@ function PersonalRecordModal({ onClose }: { onClose: () => void }) {
             type="checkbox"
             checked={useClock}
             onChange={(e) => setUseClock(e.target.checked)}
-            className="h-5 w-5 accent-emerald-600"
+            className="h-5 w-5 accent-sky-600"
           />
         </label>
 
@@ -634,9 +635,9 @@ function PersonalRecordModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="rounded-2xl bg-gray-50 px-3 py-2 text-[11px] dark:bg-slate-700">
-          <Row label="المدة المحسوبة" value={formatDuration(computedMinutes)} />
-          <Row label="تكلفة الديزل" value={formatMoney(dieselAmount, pump.currency)} />
-          <Row label="المتبقي" value={formatMoney(debtAmount, pump.currency)} tone="amber" />
+          <MiniRow label="المدة المحسوبة" value={formatDuration(computedMinutes)} />
+          <MiniRow label="تكلفة الديزل" value={formatMoney(dieselAmount, pump.currency)} />
+          <MiniRow label="المتبقي" value={formatMoney(debtAmount, pump.currency)} tone="amber" />
         </div>
 
         <Field label="ملاحظات">
@@ -823,32 +824,6 @@ function SettlementModal({
 }
 
 /** صف صغير للعرض داخل البطاقات */
-function Row({
-  label,
-  value,
-  tone = "gray",
-}: {
-  label: string;
-  value: string;
-  tone?: "green" | "amber" | "red" | "gray";
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-gray-400">{label}</span>
-      <span
-        className={cx(
-          "font-extrabold",
-          tone === "green" && "text-emerald-700 dark:text-emerald-300",
-          tone === "amber" && "text-amber-600 dark:text-amber-300",
-          tone === "red" && "text-red-600 dark:text-red-400",
-          tone === "gray" && "text-gray-700 dark:text-slate-200"
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
 
 function AuditTab() {
   const { state } = useApp();
@@ -863,7 +838,7 @@ function AuditTab() {
   return (
     <div className="space-y-4">
       <Card className="flex items-center gap-2 p-3">
-        <History size={16} className="text-emerald-600" />
+        <History size={16} className="text-sky-600 dark:text-sky-300" />
         <Select value={entity} onChange={(e) => setEntity(e.target.value)} className="flex-1">
           <option value="all">كل السجلات</option>
           {entities.map((e) => (

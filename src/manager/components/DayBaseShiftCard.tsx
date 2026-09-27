@@ -1,28 +1,33 @@
 /**
- * قسم **الدوام الأساسي** في شاشة اليوم — عرض كشف الديالة (وهو كشف واحد لكل أيامها).
- * القراءة أولًا، وزر «تعديل الكشف» يفتح نفس محرّر الكشف المستخدم في شاشة الديالات،
- * فلا تتكرّر البيانات ولا تختلف النسخ.
+ * بطاقة **مساهمو ديالة اليوم — للعرض فقط**.
+ *
+ * قاعدة المشروع: قائمة مساهمي الديالة (الكشف) مرجع واحد يُدار في شاشة الديالات
+ * (أيام الديالة) فقط — لا تُضاف ولا تُعدَّل من هنا. وهذه البطاقة **لا تحجز أي
+ * ساعة** من تشغيل المضخة: دوام اليوم الفعلي يبنيه المسؤول مشاركًا مشاركًا.
  */
 import { useMemo, useState } from "react";
-import { ListOrdered, PencilLine, Lock } from "lucide-react";
+import { ArrowLeft, ListOrdered, Lock, Phone } from "lucide-react";
 import { useApp } from "../../store";
 import {
   baseRosterCapacityMin,
-  baseRosterRemainingMin,
   baseRosterTimeline,
   baseRosterTotalMin,
-  dayNumberInRound,
-  dayOrdinal,
+  shareUseNote,
 } from "../../domain/rules";
 import type { DialaDay } from "../../domain/types";
 import { formatDuration, toHours } from "../../domain/util";
-import { Button, Card, Pill } from "../../components/ui";
-import { roleLabel } from "../../components/PersonPicker";
-import BaseRosterPanel from "./BaseRosterPanel";
+import { Card, Pill } from "../../components/ui";
 
 const PREVIEW = 8;
 
-export default function DayBaseShiftCard({ day, actor }: { day: DialaDay; actor: string }) {
+export default function DayBaseShiftCard({
+  day,
+  onManageList,
+}: {
+  day: DialaDay;
+  /** الانتقال إلى شاشة الديالات حيث الإدارة الكاملة للكشف */
+  onManageList?: () => void;
+}) {
   const { state } = useApp();
   const pump = state.pump!;
   const round = state.rounds.find((r) => r.id === day.roundId) ?? null;
@@ -31,93 +36,108 @@ export default function DayBaseShiftCard({ day, actor }: { day: DialaDay; actor:
     [state, pump, round]
   );
   const totalMin = round ? baseRosterTotalMin(state, round.id) : 0;
-  const remainingMin = round ? baseRosterRemainingMin(state, pump, round.id) : baseRosterCapacityMin(pump);
   const capacityMin = baseRosterCapacityMin(pump);
   const [showAll, setShowAll] = useState(false);
-  const [editing, setEditing] = useState(false);
-
   const visible = showAll ? rows : rows.slice(0, PREVIEW);
 
   return (
     <Card className="p-4" data-testid="day-base-shift">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <ListOrdered size={16} className="text-emerald-600" />
+        <ListOrdered size={16} className="text-sky-600 dark:text-sky-300" />
         <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
-          الدوام الأساسي — كشف {round ? `ديالة ${round.number}` : "الديالة"}
-          {round ? ` (اليوم ${dayOrdinal(dayNumberInRound(state, day))} من ${round.days})` : ""}
+          مساهمو ديالة اليوم — للعرض فقط
         </h2>
         {round?.rosterLocked ? (
-          <Pill tone="green">
+          <Pill tone="teal">
             <Lock size={10} /> مثبَّت
           </Pill>
         ) : null}
         <span className="mr-auto text-[11px] text-gray-400">
-          {rows.length} شخصًا · {formatDuration(totalMin)} من {toHours(capacityMin)} ساعة
+          {rows.length} شخصًا · {formatDuration(totalMin)}
         </span>
       </div>
 
       {!round ? (
-        <p className="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+        <p
+          className="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+          data-testid="day-base-no-round"
+        >
           هذا اليوم غير مرتبط بديالة — الكشف يُسجَّل لكل ديالة.
         </p>
       ) : rows.length === 0 ? (
-        <p className="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" data-testid="day-base-empty">
-          لم تُسجَّل أسماء الدوام الأساسي لهذه الديالة بعد — أضف المساهمين ونصيب كل واحد (بحدّ {toHours(capacityMin)}{" "}
-          ساعة تشغيل)، ثم ابدأ الدوام الفعلي.
+        <p
+          className="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+          data-testid="day-base-empty"
+        >
+          لم تُسجَّل أسماء كشف ديالة {round.number} بعد — أضف القائمة كاملة من شاشة الديالات، ثم ابنِ دوام
+          هذا اليوم مشاركًا مشاركًا.
         </p>
       ) : (
         <>
           <div className="space-y-1">
-            {visible.map((row, index) => (
-              <div
-                key={row.member.id}
-                className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-1.5 text-[11px] dark:bg-slate-700"
-                data-testid={`day-base-row-${index + 1}`}
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-[10px] font-black text-emerald-700 dark:bg-slate-800 dark:text-emerald-300">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-extrabold text-gray-800 dark:text-white">
-                  {row.name}
-                </span>
-                <span className="hidden text-gray-400 sm:block">{roleLabel(row.role)}</span>
-                <span className="text-gray-500 dark:text-slate-300">
-                  {row.startTime} → {row.endTime}
-                </span>
-                <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                  {formatDuration(row.shareMin)}
-                </span>
-              </div>
-            ))}
+            {visible.map((row, index) => {
+              const use = shareUseNote(state, pump.id, row.personId, day.date);
+              return (
+                <div
+                  key={row.member.id}
+                  className="flex items-center gap-2 rounded-xl bg-sky-50/60 px-3 py-1.5 text-[11px] dark:bg-slate-700"
+                  data-testid={`day-base-row-${index + 1}`}
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-cyan-600 text-[10px] font-black text-white">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-extrabold text-gray-800 dark:text-white">
+                    {row.name}
+                  </span>
+                  {use ? (
+                    <span
+                      className="shrink-0 rounded-lg bg-white px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-slate-800 dark:text-amber-300"
+                      title={use.holder ? `صاحب الحق: ${use.holder}` : undefined}
+                    >
+                      {use.label}
+                    </span>
+                  ) : null}
+                  <span className="shrink-0 font-bold text-sky-700 dark:text-sky-300">
+                    {formatDuration(row.shareMin)}
+                  </span>
+                  {row.phone ? (
+                    <a
+                      href={`tel:${row.phone}`}
+                      dir="ltr"
+                      className="hidden shrink-0 items-center gap-0.5 text-[10px] font-bold text-gray-500 sm:flex dark:text-slate-300"
+                    >
+                      <Phone size={10} /> {row.phone}
+                    </a>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {rows.length > PREVIEW ? (
-              <button
-                className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300"
-                onClick={() => setShowAll((v) => !v)}
-                data-testid="day-base-toggle"
-              >
-                {showAll ? "إظهار أقل" : `إظهار كل الأسماء (${rows.length})`}
-              </button>
-            ) : null}
-            <span className="text-[10px] text-gray-400">
-              المتبقي من ساعات التشغيل: {formatDuration(remainingMin)}
-            </span>
-            <Button
-              variant="ghost"
-              className="mr-auto px-3 py-1.5 text-[11px]"
-              onClick={() => setEditing((v) => !v)}
-              data-testid="day-base-edit"
+          {rows.length > PREVIEW ? (
+            <button
+              className="mt-2 text-[11px] font-bold text-sky-700 dark:text-sky-300"
+              onClick={() => setShowAll((v) => !v)}
+              data-testid="day-base-toggle"
             >
-              <PencilLine size={13} /> {editing ? "إغلاق تعديل الكشف" : "تعديل الكشف"}
-            </Button>
-          </div>
+              {showAll ? "إظهار أقل" : `إظهار كل الأسماء (${rows.length})`}
+            </button>
+          ) : null}
         </>
       )}
 
-      {round && (editing || rows.length === 0) ? (
-        <BaseRosterPanel round={round} actor={actor} defaultExpanded />
-      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          onClick={onManageList}
+          className="flex items-center gap-1 rounded-2xl border border-sky-100 bg-sky-50 px-3 py-1.5 text-[11px] font-bold text-sky-700 transition hover:bg-sky-100 dark:border-sky-900/40 dark:bg-sky-900/25 dark:text-sky-300"
+          data-testid="day-base-manage"
+        >
+          إدارة القائمة في أيام الديالة <ArrowLeft size={12} />
+        </button>
+        <span className="text-[10px] text-gray-400">
+          نصيب الكشف لا يُحجز من ساعات التشغيل ({toHours(capacityMin)} ساعة) — الحجز يتم عند إدخال المشارك
+          فعلًا.
+        </span>
+      </div>
     </Card>
   );
 }

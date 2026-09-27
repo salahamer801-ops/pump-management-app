@@ -4,7 +4,7 @@ import { useShareholder } from "../store";
 import MembershipPanel from "../MembershipPanel";
 import { activePumps } from "../selectors";
 import { endTimeFor, uid } from "../calc";
-import { formatHours, formatMoneyYER, formatTimeAmPm } from "../format";
+import { formatHours, formatMoneyFor, formatTimeAmPm, formatTimeRange } from "../format";
 import type { ShareholderPump } from "../types";
 import {
   Button,
@@ -147,7 +147,7 @@ export default function PumpsScreen() {
                         <Gauge size={12} /> {p.dieselPerHour} لتر/ساعة
                       </span>
                       <span>
-                        {formatTimeAmPm(p.startTime)} ← {formatTimeAmPm(endTimeFor(p))}
+                        {formatTimeRange(p.startTime, endTimeFor(p))}
                       </span>
                     </div>
                   </div>
@@ -155,10 +155,10 @@ export default function PumpsScreen() {
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
-                    الرواس: {formatMoneyYER(p.royaltyCost)}
+                    الرواس: {formatMoneyFor(p.royaltyCost, p)}
                   </span>
                   <span className="rounded-full bg-gray-50 px-2.5 py-1 font-bold text-gray-500">
-                    الديزل: {formatMoneyYER(p.dieselPricePerLiter)} / لتر
+                    الديزل: {formatMoneyFor(p.dieselPricePerLiter, p)} / لتر
                   </span>
                 </div>
               </Card>
@@ -207,7 +207,7 @@ export default function PumpsScreen() {
             </Field>
           </div>
 
-          <div className="rounded-2xl bg-emerald-50 p-3 text-center text-sm font-bold text-emerald-800">
+          <div className="rounded-2xl bg-brand-50 p-3 text-center text-sm font-bold text-brand-800 dark:bg-brand-800/40 dark:text-sky-200">
             وقت الإطفاء يُحسب تلقائيًا: {formatTimeAmPm(previewEnd)}
           </div>
 

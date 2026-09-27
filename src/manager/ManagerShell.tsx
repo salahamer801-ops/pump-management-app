@@ -48,7 +48,12 @@ export default function ManagerShell() {
   }
 
   return (
-    <AppProvider key={active.id} storageKey={managerStorageKey(active.id)} adoptName={active.name}>
+    <AppProvider
+      key={active.id}
+      storageKey={managerStorageKey(active.id)}
+      adoptName={active.name}
+      serverPump={{ id: active.id, pumpCode: active.pumpCode, name: active.name }}
+    >
       <ManagerApp pump={active} onSwitchPump={() => setGateOpen(true)} />
     </AppProvider>
   );

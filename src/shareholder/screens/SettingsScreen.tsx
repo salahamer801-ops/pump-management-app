@@ -177,7 +177,7 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
           title={t("الشروط وسياسة الخصوصية", "Terms & Privacy")}
         />
         <div className="mt-3 flex items-start gap-3 rounded-2xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 dark:bg-slate-700/50 dark:text-slate-300">
-          <FileText size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+          <FileText size={18} className="mt-0.5 shrink-0 text-sky-600 dark:text-sky-300" />
           <div className="space-y-2">
             <p>
               {t(

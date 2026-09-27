@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Droplets, Megaphone } from "lucide-react";
+import { Megaphone } from "lucide-react";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import ServerLoginScreen from "./screens/LoginScreen";
 import ManagerShell from "./manager/ManagerShell";
 import ShareholderApp from "./shareholder/ShareholderApp";
 import AdminApp from "./admin/AdminApp";
+import { BrandSplash } from "./components/Brand";
 import { clearLegacySession } from "./session";
+
 
 /**
  * الباب الوحيد للتطبيق: الحساب الحقيقي على الخادم (رقم الهاتف + كلمة المرور).
@@ -31,25 +33,13 @@ function Root() {
   const [adminPanel, setAdminPanel] = useState(false);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 animate-pulse items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white">
-            <Droplets size={28} />
-          </div>
-          <p className="text-sm font-bold text-gray-500">جارٍ التحقق…</p>
-        </div>
-      </div>
-    );
+    /* شاشة البدء: يملأ الشعار الشاشة أثناء التحقق من الحساب */
+    return <BrandSplash />;
   }
 
   /* بلا حساب: شاشة الدخول/إنشاء الحساب على الخادم — لا شيء غيرها */
   if (!session) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <ServerLoginScreen />
-      </div>
-    );
+    return <ServerLoginScreen />;
   }
 
   const announcement = session.announcement;

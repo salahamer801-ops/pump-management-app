@@ -30,7 +30,7 @@ import {
   timeToMinutes,
   uid,
 } from "../calc";
-import { formatDayDate, formatDurationHours, formatTimeAmPm } from "../format";
+import { formatDayDate, formatDurationHours, formatTimeAmPm, formatTimeRange } from "../format";
 import type { DayContributor, DayShareType, ShareholderCycle } from "../types";
 import {
   Button,
@@ -134,7 +134,7 @@ export default function CyclesScreen() {
             return (
               <div key={pump.id}>
                 <div className="mb-2 flex items-center gap-2 px-1 text-sm font-extrabold text-gray-700 dark:text-slate-200">
-                  <Droplets size={16} className="text-emerald-600" /> {pump.name}
+                  <Droplets size={16} className="text-sky-600 dark:text-sky-300" /> {pump.name}
                 </div>
                 <div className="space-y-2">
                   {pumpCycles.map((cycle) => (
@@ -181,7 +181,7 @@ export default function CyclesScreen() {
             </Field>
           </div>
           <div className="rounded-2xl bg-emerald-50 p-3 text-center dark:bg-emerald-900/30">
-            <div className="text-xs text-emerald-600 dark:text-emerald-300">اسم الدياله تلقائيًا</div>
+            <div className="text-xs text-sky-600 dark:text-sky-300">اسم الدياله تلقائيًا</div>
             <div className="text-sm font-black text-emerald-800 dark:text-emerald-200">{previewName}</div>
           </div>
           <div className="flex gap-3">
@@ -248,13 +248,13 @@ function CycleCard({
               aria-label={label}
               className={`relative flex h-11 flex-col items-center justify-center overflow-hidden rounded-lg text-xs font-bold transition ${
                 isFull
-                  ? "bg-emerald-600 text-white"
+                  ? "bg-brand-700 text-white"
                   : filled > 0
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200"
+                    ? "bg-brand-100 text-brand-800 dark:bg-brand-800/60 dark:text-sky-100"
                     : isPast
                       ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
                       : "bg-gray-50 text-gray-400 dark:bg-slate-700 dark:text-slate-300"
-              } ${isToday ? "ring-2 ring-emerald-400 ring-offset-1 dark:ring-offset-slate-900" : ""}`}
+              } ${isToday ? "ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-slate-900" : ""}`}
             >
               <span>{day}</span>
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/10 dark:bg-white/10">
@@ -402,7 +402,7 @@ function DayDetailModal({
               <span
                 className={`rounded-full px-2.5 py-1 ${
                   isFull
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-brand-700 text-white"
                     : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
                 }`}
               >
@@ -440,7 +440,7 @@ function DayDetailModal({
                       </div>
                       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
                         <Clock size={12} />
-                        {formatTimeAmPm(c.startTime)} ← {formatTimeAmPm(c.endTime)} · {formatDurationHours(c.hours)}
+                        {formatTimeRange(c.startTime, c.endTime)} · {formatDurationHours(c.hours)}
                       </div>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         <Pill tone={c.dieselPaid ? "green" : "gray"}>
@@ -454,7 +454,7 @@ function DayDetailModal({
                     <div className="flex flex-col gap-1">
                       <button
                         onClick={() => startEdit(c)}
-                        className="rounded-lg px-2 py-1 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"
+                        className="rounded-lg px-2 py-1 text-xs font-bold text-sky-600 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-900/30"
                       >
                         تعديل
                       </button>

@@ -1,41 +1,28 @@
+import { fuelCostFor, fuelLitersFor } from "../domain/rules";
+import { minutesToTime, timeToMinutes, uid } from "../domain/util";
 import type { ShareholderPump } from "./types";
 
-export function uid(): string {
-  return (
-    Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
-  );
-}
-
-export function timeToMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-export function minutesToTime(min: number): string {
-  const total = ((Math.round(min) % 1440) + 1440) % 1440;
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
+/* المعرّفات والوقت من طبقة القواعد المشتركة — بلا نسخة ثانية هنا */
+export { minutesToTime, timeToMinutes, uid };
 
 /** وقت الإطفاء = وقت التشغيل + ساعات التشغيل */
 export function endTimeFor(pump: ShareholderPump): string {
   return minutesToTime(timeToMinutes(pump.startTime) + pump.dailyHours * 60);
 }
 
-export function roundMoney(n: number): number {
-  return Math.round(n);
-}
-
-/** الديزل باللتر = الساعات × لتر/ساعة */
+/** الديزل باللتر = الساعات × لتر/ساعة — بنفس معادلة النظام الرسمي */
 export function dieselLiters(hours: number, pump: ShareholderPump): number {
-  return roundMoney(hours * pump.dieselPerHour * 100) / 100;
+  return fuelLitersFor(Math.max(0, hours) * 60, {
+    energyType: "diesel",
+    fuelCalcMode: "hour",
+    fuelConsumptionPerHour: pump.dieselPerHour,
+  });
 }
 
-/** تكلفة الديزل = اللتر × سعر اللتر */
+/** تكلفة الديزل = اللتر × سعر اللتر — بنفس معادلة النظام الرسمي */
 export function dieselCost(hours: number, pump: ShareholderPump, pricePerLiter?: number): number {
   const price = pricePerLiter ?? pump.dieselPricePerLiter;
-  return roundMoney(hours * pump.dieselPerHour * price);
+  return fuelCostFor(dieselLiters(hours, pump), price);
 }
 
 /** قيمة السلفة/التسلفة حسب الوحدة والكمية */

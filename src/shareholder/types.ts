@@ -1,6 +1,10 @@
+import type { Currency } from "../domain/types";
+
 export interface ShareholderPump {
   id: string;
   name: string;
+  /** عملة المضخة (من النظام الرسمي) — تُستخدم في عرض المبالغ */
+  currency?: Currency;
   dailyHours: number; // ساعات التشغيل اليومية
   dieselPerHour: number; // لتر ديزل لكل ساعة
   dieselPricePerLiter: number; // سعر لتر الديزل بالريال اليمني
