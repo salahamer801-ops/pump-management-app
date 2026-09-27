@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+dist
+.git
+.gitignore
+.mythex
+.env
+.env.mythex
+docs
+scripts
+src
+public
+index.html
+README.md
+Dockerfile
+.dockerignore

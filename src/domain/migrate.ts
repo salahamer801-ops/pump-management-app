@@ -25,7 +25,7 @@ import type {
 } from "./types";
 import { addDaysISO, durationMin, isoToShort, minutesToTime, timeToMinutes, todayISO, uid } from "./util";
 import { computeUsageDraft, isoRangeDays } from "./rules";
-import { generatePumpCode } from "../lib/auth";
+import { generatePumpCode } from "../lib/ids";
 
 export function emptyState(): AppState {
   return {
