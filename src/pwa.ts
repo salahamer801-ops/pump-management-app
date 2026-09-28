@@ -75,6 +75,12 @@ export function isIos(): boolean {
   return iosDevice || ipadDesktopUa;
 }
 
+/** أندرويد (جوال/تابلت) — فيه خيار «تثبيت التطبيق» في قائمة كروم */
+export function isAndroid(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent || "");
+}
+
 export type InstallOutcome = "accepted" | "dismissed" | "unavailable";
 
 export interface PwaState {
@@ -84,6 +90,8 @@ export interface PwaState {
   installed: boolean;
   /** آيفون — إرشاد يدوي */
   ios: boolean;
+  /** أندرويد — يظهر «تثبيت التطبيق» في قائمة كروم */
+  android: boolean;
   /** نسخة جديدة بانتظار إعادة التحميل */
   needRefresh: boolean;
   /** الأصول جاهزة للعمل بلا إنترنت */
@@ -108,6 +116,7 @@ export function usePwaState(): PwaState {
     canInstall: deferredPrompt !== null,
     installed: isStandalone(),
     ios: isIos(),
+    android: isAndroid(),
     needRefresh: pendingRefresh,
     offlineReady: readyOffline,
     install: async () => {
