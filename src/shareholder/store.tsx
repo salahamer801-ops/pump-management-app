@@ -19,6 +19,7 @@ import type {
   ShareholderTurn,
   Theme,
 } from "./types";
+import type { Appearance } from "../domain/appearance";
 import { uid } from "./calc";
 
 const STORAGE_KEY = "pump-org-shareholder-v2";
@@ -26,6 +27,7 @@ const STORAGE_KEY = "pump-org-shareholder-v2";
 type Action =
   | { type: "SET_PROFILE"; profile: ShareholderProfile }
   | { type: "SET_THEME"; theme: Theme }
+  | { type: "SET_APPEARANCE"; patch: Partial<Appearance> }
   | { type: "SET_LANGUAGE"; language: Language }
   | { type: "ADD_PUMP"; pump: ShareholderPump }
   | { type: "UPDATE_PUMP"; pump: ShareholderPump }
@@ -64,7 +66,21 @@ function reducer(state: ShareholderState, action: Action): ShareholderState {
       return {
         ...state,
         settings: { ...state.settings, theme: action.theme },
-        history: log(state, `تغيير المظهر إلى ${action.theme === "dark" ? "الداكن" : "الفاتح"}`, "settings"),
+        history: log(
+          state,
+          `تغيير المظهر إلى ${
+            action.theme === "dark" ? "الداكن" : action.theme === "system" ? "حسب الجهاز" : "الفاتح"
+          }`,
+          "settings"
+        ),
+      };
+
+    /* المظهر والكتابة: الوضع · قوة الكتابة · لون التمييز · حجم الخط */
+    case "SET_APPEARANCE":
+      return {
+        ...state,
+        settings: { ...state.settings, ...action.patch },
+        history: log(state, "تعديل المظهر والكتابة", "settings"),
       };
 
     case "SET_LANGUAGE":
@@ -260,7 +276,7 @@ function defaultProfile(): ShareholderProfile {
 }
 
 function defaultSettings(): ShareholderSettings {
-  return { theme: "light", language: "ar" };
+  return { theme: "light", language: "ar", textStrength: "normal", accent: "brand", fontSize: "md" };
 }
 
 export function emptyState(profile?: ShareholderProfile): ShareholderState {
@@ -287,6 +303,10 @@ function migrate(raw: unknown): ShareholderState {
   const settings: ShareholderSettings = {
     theme: obj.settings?.theme ?? "light",
     language: obj.settings?.language ?? "ar",
+    /* إعدادات المظهر الجديدة: تُضاف للبيانات القديمة بقيم افتراضية بلا حذف أي شيء */
+    textStrength: obj.settings?.textStrength ?? "normal",
+    accent: obj.settings?.accent ?? "brand",
+    fontSize: obj.settings?.fontSize ?? "md",
   };
   return {
     profile,
@@ -325,6 +345,8 @@ interface ShareholderContextValue {
   actions: {
     setProfile: (profile: ShareholderProfile) => void;
     setTheme: (theme: Theme) => void;
+    /** يعدّل المظهر والكتابة معًا: الوضع، قوة الكتابة، لون التمييز، حجم الخط */
+    setAppearance: (patch: Partial<Appearance>) => void;
     setLanguage: (language: Language) => void;
     addPump: (pump: ShareholderPump) => void;
     updatePump: (pump: ShareholderPump) => void;
@@ -361,6 +383,7 @@ export function ShareholderProvider({ children }: { children: ReactNode }) {
     () => ({
       setProfile: (profile) => dispatch({ type: "SET_PROFILE", profile }),
       setTheme: (theme) => dispatch({ type: "SET_THEME", theme }),
+      setAppearance: (patch) => dispatch({ type: "SET_APPEARANCE", patch }),
       setLanguage: (language) => dispatch({ type: "SET_LANGUAGE", language }),
       addPump: (pump) => dispatch({ type: "ADD_PUMP", pump }),
       updatePump: (pump) => dispatch({ type: "UPDATE_PUMP", pump }),

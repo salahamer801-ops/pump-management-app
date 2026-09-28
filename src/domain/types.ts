@@ -22,7 +22,13 @@ export interface SoftDeletable {
 
 export type Currency = "YER" | "SAR" | "USD";
 export type EnergyType = "solar" | "diesel" | "hybrid";
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "system";
+/** قوة كتابة النصوص: عادي · قوي · قوي جدًا (تباين أعلى للقراءة في الشمس وعلى الشاشات الباهتة) */
+export type TextStrength = "normal" | "strong" | "max";
+/** لون التمييز: الأزرار والعناوين والعناصر الفعّالة */
+export type AccentColor = "brand" | "teal" | "violet" | "amber";
+/** حجم الكتابة العام في التطبيق */
+export type FontSize = "sm" | "md" | "lg" | "xl";
 export type Language = "ar" | "en";
 
 export type FuelCalcMode = "hour" | "cycle";
@@ -850,6 +856,12 @@ export interface AppSettings {
   language: Language;
   deviceId: string;
   lastSyncAt: string;
+  /** قوة كتابة النصوص (تباين أعلى إن كانت الشاشة باهتة) */
+  textStrength: TextStrength;
+  /** لون التمييز في الواجهة */
+  accent: AccentColor;
+  /** حجم الكتابة العام */
+  fontSize: FontSize;
 }
 
 export interface AppState {

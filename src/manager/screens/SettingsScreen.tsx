@@ -6,12 +6,10 @@ import {
   Droplets,
   Info,
   KeyRound,
-  Moon,
   RefreshCcw,
   Save,
   Pencil,
   SlidersHorizontal,
-  Sun,
   Tractor,
   Trash2,
   Upload,
@@ -23,6 +21,7 @@ import { normalizeState } from "../../domain/migrate";
 import {formatClock, formatTimeRange, todayISO} from "../../domain/util";
 import { Button, Card, Field, Modal, NumberInput, Pill, Select, TextArea, TextInput, TimeInput, cx } from "../../components/ui";
 import { InstallAppCard } from "../../components/InstallApp";
+import { AppearanceCard } from "../../components/AppearanceCard";
 import TelegramVerifyCard from "../../components/TelegramVerify";
 import { BRAND_NAME, BrandLogo } from "../../components/Brand";
 
@@ -198,36 +197,8 @@ export default function SettingsScreen({
         </Button>
       </Card>
 
-      <Card className="space-y-3 p-4">
-        <div className="flex items-center gap-2">
-          {state.settings.theme === "dark" ? <Moon size={16} className="text-sky-600 dark:text-sky-300" /> : <Sun size={16} className="text-sky-600 dark:text-sky-300" />}
-          <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">المظهر والواجهة</h2>
-        </div>
-        <div className="flex gap-2">
-          {(
-            [
-              { id: "light", label: "الوضع الفاتح" },
-              { id: "dark", label: "الوضع الداكن" },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => actions.setTheme(t.id)}
-              className={cx(
-                "flex-1 rounded-2xl border px-3 py-2 text-xs font-bold transition",
-                state.settings.theme === t.id
-                  ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30"
-                  : "border-gray-200 text-gray-500 dark:border-slate-600 dark:text-slate-300"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[10px] text-gray-400">
-          الواجهة عربية بالكامل مع دعم الاتجاه RTL، والنصوص والبطاقات تظهر في الوضعين.
-        </p>
-      </Card>
+      {/* المظهر والكتابة: الوضع · قوة الكتابة · لون التمييز · حجم الخط */}
+      <AppearanceCard value={state.settings} onChange={actions.setAppearance} />
 
       <Card className="space-y-3 p-4">
         <div className="flex items-center gap-2">

@@ -35,8 +35,7 @@ function contentSecurityMeta(): Plugin {
         "<head>",
         `<head>
     <meta http-equiv="Content-Security-Policy" content="${CSP_META}" />
-    <meta name="referrer" content="no-referrer" />
-    <meta name="color-scheme" content="light" />`
+    <meta name="referrer" content="no-referrer" />`
       );
     },
   };

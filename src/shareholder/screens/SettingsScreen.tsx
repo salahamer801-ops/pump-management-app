@@ -5,11 +5,8 @@ import {
   Globe,
   Info,
   LogOut,
-  Moon,
-  Palette,
   Save,
   ShieldCheck,
-  Sun,
   UserRound,
   History,
 } from "lucide-react";
@@ -27,6 +24,7 @@ import {
 } from "../../components/ui";
 import { formatDateTime } from "../../format";
 import { InstallAppCard } from "../../components/InstallApp";
+import { AppearanceCard } from "../../components/AppearanceCard";
 import { SyncSettingsCard } from "../SyncPanel";
 import PushCard from "../PushCard";
 import TelegramVerifyCard from "../../components/TelegramVerify";
@@ -109,28 +107,8 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
         </div>
       </Card>
 
-      {/* الثيم */}
-      <Card className="p-5">
-        <SectionTitle
-          icon={<Palette size={18} />}
-          title={t("الثيم", "Theme")}
-          subtitle={t("مظهر التطبيق", "App appearance")}
-        />
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <ThemeButton
-            active={state.settings.theme === "light"}
-            onClick={() => actions.setTheme("light")}
-            icon={<Sun size={20} />}
-            title={t("فاتح", "Light")}
-          />
-          <ThemeButton
-            active={state.settings.theme === "dark"}
-            onClick={() => actions.setTheme("dark")}
-            icon={<Moon size={20} />}
-            title={t("داكن", "Dark")}
-          />
-        </div>
-      </Card>
+      {/* المظهر والكتابة: الوضع · قوة الكتابة · لون التمييز · حجم الخط */}
+      <AppearanceCard value={state.settings} onChange={actions.setAppearance} t={t} />
 
       {/* اللغة */}
       <Card className="p-5">
@@ -305,42 +283,6 @@ function SectionTitle({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function ThemeButton({
-  active,
-  onClick,
-  icon,
-  title,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  title: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cx(
-        "flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition",
-        active
-          ? "border-emerald-500 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-900/30"
-          : "border-gray-200 bg-white hover:border-emerald-200 dark:border-slate-600 dark:bg-slate-800"
-      )}
-    >
-      <span
-        className={cx(
-          "flex h-10 w-10 items-center justify-center rounded-xl",
-          active ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-300"
-        )}
-      >
-        {icon}
-      </span>
-      <span className={cx("text-sm font-bold", active ? "text-emerald-700 dark:text-emerald-300" : "text-gray-600 dark:text-slate-300")}>
-        {title}
-      </span>
-    </button>
   );
 }
 

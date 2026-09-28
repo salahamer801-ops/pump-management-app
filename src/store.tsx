@@ -68,6 +68,7 @@ import {
   type DetectedConflict,
 } from "./domain/rules";
 import { emptyState, migrateV1, normalizeState, seedDemo } from "./domain/migrate";
+import { applyAppearance, watchSystemTheme, type Appearance } from "./domain/appearance";
 import {
   applyPayload,
   applyServerPumpIdentity,
@@ -233,6 +234,7 @@ export type Action =
   | { type: "READ_NOTIFICATIONS"; ids: string[] | null }
   | { type: "CLEAR_NOTIFICATIONS" }
   | { type: "SET_THEME"; theme: Theme }
+  | { type: "SET_APPEARANCE"; patch: Partial<Appearance> }
   | { type: "MARK_SYNCED" }
   | { type: "RESET" }
   | { type: "SEED_DEMO" }
@@ -2442,6 +2444,10 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_THEME":
       return { ...state, settings: { ...state.settings, theme: action.theme } };
 
+    /* المظهر والكتابة: وضع (فاتح/داكن/حسب الجهاز) · قوة الكتابة · لون التمييز · حجم الخط */
+    case "SET_APPEARANCE":
+      return { ...state, settings: { ...state.settings, ...action.patch } };
+
     case "MARK_SYNCED": {
       const at = new Date().toISOString();
       return {
@@ -2641,6 +2647,8 @@ export interface AppActions {
   readNotifications: (ids: string[] | null) => void;
   clearNotifications: () => void;
   setTheme: (theme: Theme) => void;
+  /** يعدّل المظهر والكتابة معًا: الوضع، قوة الكتابة، لون التمييز، حجم الخط */
+  setAppearance: (patch: Partial<Appearance>) => void;
   markSynced: () => void;
   reset: () => void;
   seedDemo: () => void;
@@ -2728,10 +2736,13 @@ export function AppProvider({
     }
   }, [state, storageKey]);
 
+  /* المظهر والكتابة: يُطبَّق على <html> فيتبعه التطبيق كله (رموز CSS في index.css) */
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", state.settings.theme === "dark");
-  }, [state.settings.theme]);
+    applyAppearance(state.settings);
+    /* وضع «حسب الجهاز»: يبقى متابعًا لتغيّر وضع الجهاز لحظيًا */
+    if (state.settings.theme !== "system") return;
+    return watchSystemTheme(() => applyAppearance(state.settings));
+  }, [state.settings]);
 
   /**
    * ============================ المرحلة الثانية ============================
@@ -2996,6 +3007,7 @@ export function AppProvider({
       readNotifications: (ids) => dispatch({ type: "READ_NOTIFICATIONS", ids }),
       clearNotifications: () => dispatch({ type: "CLEAR_NOTIFICATIONS" }),
       setTheme: (theme) => dispatch({ type: "SET_THEME", theme }),
+      setAppearance: (patch) => dispatch({ type: "SET_APPEARANCE", patch }),
       markSynced: () => dispatch({ type: "MARK_SYNCED" }),
       reset: () => dispatch({ type: "RESET" }),
       seedDemo: () => dispatch({ type: "SEED_DEMO" }),

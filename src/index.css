@@ -46,6 +46,109 @@ body {
   color: #e2e8f0;
 }
 
+/* ==========================================================================
+   المظهر والكتابة — خيارات المستخدم (تُضبط كسمات data-* على <html>)
+   الفكرة: لا نكتب ألوانًا في المكوّنات؛ نعيد تعريف رموز Tailwind نفسها،
+   فيتغيّر لون الكتابة وحجمها ولون الأزرار في التطبيق كله دفعة واحدة.
+   ========================================================================== */
+
+/* عناصر المتصفح (الحقول، القوائم، أشرطة التمرير) تتبع الوضع الحالي */
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* ---------- قوة الكتابة: ترفع درجات الرمادي الباهتة ---------- */
+html[data-text="strong"] {
+  --color-gray-400: #6b7280;
+  --color-gray-500: #4b5563;
+  --color-slate-300: #475569;
+  --color-slate-400: #64748b;
+}
+html.dark[data-text="strong"] {
+  --color-gray-400: #cbd5e1;
+  --color-gray-500: #e2e8f0;
+  --color-slate-300: #e2e8f0;
+  --color-slate-400: #cbd5e1;
+}
+html[data-text="max"] {
+  --color-gray-400: #374151;
+  --color-gray-500: #1f2937;
+  --color-gray-600: #111827;
+  --color-slate-300: #1e293b;
+  --color-slate-400: #334155;
+}
+html.dark[data-text="max"] {
+  --color-gray-400: #f8fafc;
+  --color-gray-500: #ffffff;
+  --color-slate-300: #ffffff;
+  --color-slate-400: #f1f5f9;
+}
+html[data-text="strong"] body {
+  color: #111827;
+}
+html[data-text="max"] body {
+  color: #030712;
+}
+html.dark[data-text="strong"] body,
+html.dark[data-text="max"] body {
+  color: #f8fafc;
+}
+
+/* ---------- لون التمييز: يعيد تعريف تدرّج الهوية (brand) ---------- */
+html[data-accent="teal"] {
+  --color-brand-50: #effcf9;
+  --color-brand-100: #cbf7ef;
+  --color-brand-200: #98ecdf;
+  --color-brand-300: #5bd8c7;
+  --color-brand-400: #2bb9a8;
+  --color-brand-500: #149486;
+  --color-brand-600: #0d7469;
+  --color-brand-700: #0f5f57;
+  --color-brand-800: #0b4a44;
+  --color-brand-900: #073733;
+}
+html[data-accent="violet"] {
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+}
+html[data-accent="amber"] {
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #fb923c;
+  --color-brand-500: #f97316;
+  --color-brand-600: #ea580c;
+  --color-brand-700: #b45309;
+  --color-brand-800: #92400e;
+  --color-brand-900: #78350f;
+}
+
+/* ---------- حجم الكتابة العام ---------- */
+html[data-font="sm"] {
+  font-size: 15px;
+}
+html[data-font="md"] {
+  font-size: 16px;
+}
+html[data-font="lg"] {
+  font-size: 17.5px;
+}
+html[data-font="xl"] {
+  font-size: 19.5px;
+}
+
 @media print {
   header,
   nav,

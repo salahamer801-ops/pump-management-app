@@ -59,6 +59,9 @@ export function emptyState(): AppState {
       language: "ar",
       deviceId: uid("dev"),
       lastSyncAt: "",
+      textStrength: "normal",
+      accent: "brand",
+      fontSize: "md",
     },
     counters: { diala: 1, round: 1 },
   };

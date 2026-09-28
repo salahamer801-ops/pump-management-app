@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { ShareholderProvider, useShareholder } from "./store";
+import { applyAppearance, watchSystemTheme } from "../domain/appearance";
 import { useAuth } from "../auth/AuthProvider";
 import { readManagerState, readOfficialMeta, readUserLink } from "../domain/storage";
 import { SYNC_LABEL, myNotifications as filterMyNotifications, unreadNotifications } from "../domain/syncStatus";
@@ -91,14 +92,16 @@ function Shell({
     });
   };
 
-  // تطبيق الثيم واللغة على مستوى المستند
+  // تطبيق المظهر والكتابة واللغة على مستوى المستند
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle("dark", state.settings.theme === "dark");
+    applyAppearance(state.settings, root);
     root.setAttribute("dir", lang === "en" ? "ltr" : "rtl");
     root.setAttribute("lang", lang === "en" ? "en" : "ar");
-    return () => root.classList.remove("dark");
-  }, [state.settings.theme, lang]);
+    /* وضع «حسب الجهاز»: يبقى متابعًا لتغيّر وضع الجوال لحظيًا */
+    if (state.settings.theme !== "system") return;
+    return watchSystemTheme(() => applyAppearance(state.settings, root));
+  }, [state.settings, lang]);
 
   // نقل اسم الجلسة إلى الملف الشخصي عند أول دخول
   useEffect(() => {

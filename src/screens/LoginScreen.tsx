@@ -133,12 +133,12 @@ export default function LoginScreen() {
           ) : null}
 
           {/* البطاقة */}
-          <div className="rounded-3xl bg-white p-5 shadow-2xl shadow-slate-950/50 ring-1 ring-white/25 sm:p-7">
+          <div className="rounded-3xl bg-white p-5 shadow-2xl shadow-slate-950/50 ring-1 ring-white/25 sm:p-7 dark:bg-slate-900 dark:ring-slate-700/60">
             <header className="mb-5 text-center">
-              <h2 className="text-xl font-black text-slate-900" data-testid="auth-title">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white" data-testid="auth-title">
                 {heading.title}
               </h2>
-              <p className="mt-1 text-[11px] font-bold text-slate-500">{heading.subtitle}</p>
+              <p className="mt-1 text-[11px] font-bold text-slate-500 dark:text-slate-300">{heading.subtitle}</p>
             </header>
 
             {tab === "login" ? (
@@ -210,7 +210,7 @@ function ErrorBox({ message }: { message: string }) {
   if (!message) return null;
   return (
     <p
-      className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-bold text-red-700"
+      className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-bold text-red-700 dark:bg-red-900/30 dark:text-red-200"
       data-testid="auth-error"
       role="alert"
     >
@@ -290,14 +290,14 @@ function LoginForm({
       </Button>
 
       {/* الوصول إلى الحساب الجديد والاستعادة: نصّ صغير أسفل البطاقة فقط */}
-      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:text-slate-300">
         {canRegister ? (
           <>
             <span>ليس لديك حساب؟ </span>
             <TextLink onClick={() => onGo("register")} testId="login-goto-register">
               إنشاء حساب جديد
             </TextLink>
-            <span className="mx-2 text-slate-300">·</span>
+            <span className="mx-2 text-slate-300 dark:text-slate-600">·</span>
           </>
         ) : null}
         <TextLink onClick={() => onGo("forgot")} testId="login-goto-forgot">
@@ -345,7 +345,7 @@ function RegisterForm({ onDone, onGo }: { onDone: () => void; onGo: (tab: Tab) =
     <div className="space-y-4">
       <ErrorBox message={error} />
       <div>
-        <div className="mb-2 text-sm font-bold text-gray-700">نوع الحساب</div>
+        <div className="mb-2 text-sm font-bold text-gray-700 dark:text-slate-200">نوع الحساب</div>
         <div className="grid grid-cols-2 gap-3">
           <TypeCard
             active={accountType === "user"}
@@ -406,7 +406,7 @@ function RegisterForm({ onDone, onGo }: { onDone: () => void; onGo: (tab: Tab) =
           />
         </Field>
       </div>
-      <p className="rounded-2xl bg-gray-50 px-4 py-3 text-[11px] leading-relaxed text-gray-500">
+      <p className="rounded-2xl bg-gray-50 px-4 py-3 text-[11px] leading-relaxed text-gray-500 dark:bg-slate-800 dark:text-slate-300">
         8 خانات على الأقل، وتحتوي حرفًا ورقمًا. تُخزَّن كلمة المرور مُشفَّرة ولا يمكن قراءتها — ولا يمكن
         استخراج كلمة المرور الأصلية حتى من إدارة النظام.
       </p>
@@ -419,13 +419,13 @@ function RegisterForm({ onDone, onGo }: { onDone: () => void; onGo: (tab: Tab) =
         <UserPlus size={20} /> {busy ? "جارٍ الإنشاء…" : "إنشاء الحساب"}
       </Button>
       {accountType === "user" ? (
-        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-[11px] leading-relaxed text-amber-800">
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
           إنشاء الحساب لا يعني أنك مساهم في أي مضخة: بعد الدخول أدخل رقم تعريف المضخة (Pump Code) وأرسل
           طلب ربط، ثم يوافق المسؤول.
         </p>
       ) : null}
 
-      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:text-slate-300">
         <span>لديك حساب؟ </span>
         <TextLink onClick={() => onGo("login")} testId="register-back-login">
           رجوع إلى تسجيل الدخول
@@ -455,21 +455,21 @@ function TypeCard({
       aria-label={title}
       className={cx(
         "rounded-3xl border-2 p-3 text-right transition",
-        active ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-gray-200 bg-white"
+        active ? "border-emerald-500 bg-emerald-50 shadow-sm dark:bg-emerald-900/30" : "border-gray-200 bg-white dark:border-slate-600 dark:bg-slate-800"
       )}
     >
       <div
         className={cx(
           "mb-2 flex h-10 w-10 items-center justify-center rounded-2xl",
-          active ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500"
+          active ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-slate-300"
         )}
       >
         {icon}
       </div>
-      <div className={cx("text-sm font-extrabold", active ? "text-emerald-700" : "text-gray-800")}>
+      <div className={cx("text-sm font-extrabold", active ? "text-emerald-700 dark:text-emerald-300" : "text-gray-800 dark:text-slate-100")}>
         {title}
       </div>
-      <div className="mt-0.5 text-[11px] text-gray-500">{description}</div>
+      <div className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-300">{description}</div>
     </button>
   );
 }
@@ -550,7 +550,7 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
   return (
     <div className="space-y-4">
       <ErrorBox message={error} />
-      <div className="flex items-center gap-2 rounded-2xl bg-sky-50 px-4 py-3 text-[11px] leading-relaxed text-sky-800">
+      <div className="flex items-center gap-2 rounded-2xl bg-sky-50 px-4 py-3 text-[11px] leading-relaxed text-sky-800 dark:bg-sky-900/30 dark:text-sky-200">
         <Send size={16} className="shrink-0" />
         {channel === "telegram" && step === "reset"
           ? "الرمز يصل إلى محادثتك في تيليجرام — لا يظهر على الشاشة."
@@ -579,14 +579,14 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
       {step === "reset" ? (
         <>
           {channel === "telegram" ? (
-            <div className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-sky-900">
+            <div className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-sky-900 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-100">
               <Send size={16} className="mt-0.5 shrink-0" />
               <span data-testid="otp-telegram-hint">
                 {hint || "أرسلنا الرمز إلى محادثتك في تيليجرام."} صلاحية الرمز {5} دقائق.
               </span>
             </div>
           ) : (
-            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700/60 dark:bg-amber-900/25">
               <div className="text-[11px] font-bold text-amber-900">رمز التحقّق الخاص بك</div>
               <div className="text-center text-2xl font-black tracking-[0.4em] text-amber-900" data-testid="reset-code">
                 {shownCode}
@@ -607,7 +607,7 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
             type="button"
             onClick={requestCode}
             disabled={busy || wait > 0}
-            className="w-full rounded-2xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 disabled:opacity-50"
+            className="w-full rounded-2xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300"
             data-testid="otp-resend"
           >
             {wait > 0 ? `إعادة الإرسال بعد ${wait} ثانية` : "أرسل رمزًا جديدًا"}
@@ -632,7 +632,7 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
               />
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
+          <label className="flex items-center gap-2 text-[11px] font-bold text-gray-500 dark:text-slate-300">
             <input
               type="checkbox"
               checked={sameNew}
@@ -656,7 +656,7 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
         </Button>
       )}
 
-      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500">
+      <div className="border-t border-slate-100 pt-4 text-center text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:text-slate-300">
         <span>تذكّرت كلمة المرور؟ </span>
         <TextLink onClick={() => onGo("login")} testId="forgot-back-login">
           رجوع إلى تسجيل الدخول

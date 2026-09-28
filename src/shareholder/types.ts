@@ -1,4 +1,11 @@
-import type { Currency } from "../domain/types";
+import type {
+  AccentColor,
+  Currency,
+  FontSize,
+  Language,
+  TextStrength,
+  Theme,
+} from "../domain/types";
 
 export interface ShareholderPump {
   id: string;
@@ -96,12 +103,17 @@ export interface ShareholderProfile {
   notes: string;
 }
 
-export type Theme = "light" | "dark";
-export type Language = "ar" | "en";
+export type { Theme, Language };
 
 export interface ShareholderSettings {
   theme: Theme;
   language: Language;
+  /** قوة كتابة النصوص (تباين أعلى إن كانت الشاشة باهتة) */
+  textStrength: TextStrength;
+  /** لون التمييز في الواجهة */
+  accent: AccentColor;
+  /** حجم الكتابة العام */
+  fontSize: FontSize;
 }
 
 export interface ShareholderState {
