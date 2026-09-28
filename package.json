@@ -12,14 +12,14 @@
     "verify": "esbuild scripts/verify-calc.ts --bundle --platform=node --format=esm --outfile=.mythex/verify-calc.mjs --log-level=error && node .mythex/verify-calc.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^7.4.4",
-    "@capacitor/core": "^7.4.4",
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "lucide-react": "0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.4.4",
+    "@capacitor/cli": "^6.2.1",
     "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
