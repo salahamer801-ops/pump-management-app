@@ -1,7 +1,46 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
+
+/*
+ * سياسة أمان المحتوى داخل الصفحة نفسها.
+ * السبب: المنصة تقدّم الملفات الثابتة كما هي، فملف public/_headers لا يُترجَم إلى
+ * ترويسات HTTP فعلية. وسم <meta http-equiv="Content-Security-Policy"> يُحترَم من
+ * المتصفح داخل المستند — ويُضاف وقت البناء فقط حتى لا يعطّل خادم التطوير (يستخدم
+ * سكربتًا داخليًا لتحديث React اللحظي).
+ * ملاحظة: frame-ancestors و X-Frame-Options لا يعملان في وسم meta — يحتاجان ترويسة،
+ * ويبقى ملف _headers جاهزًا لأي مستضيف يطبّقه.
+ */
+const CSP_META = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+function contentSecurityMeta(): Plugin {
+  return {
+    name: "mythex-content-security-meta",
+    apply: "build",
+    transformIndexHtml(html) {
+      return html.replace(
+        "<head>",
+        `<head>
+    <meta http-equiv="Content-Security-Policy" content="${CSP_META}" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="light" />`
+      );
+    },
+  };
+}
 
 export default defineConfig({
   /* الواجهة تصل إلى خدماتها عبر مسار نسبي /api — نفس الأصل في المعاينة والمنشور */
@@ -14,6 +53,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    contentSecurityMeta(),
     react(),
     tailwindcss(),
     VitePWA({
