@@ -18,6 +18,7 @@ import {
   getPublicKey,
   newNotifications,
   notifyPumpMembers,
+  pushEndpointProblem,
   removeSubscription,
   saveSubscription,
 } from "../push.js";
@@ -880,6 +881,8 @@ operatingRouter.post(
   wrap(async (req, res) => {
     const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
     const subscription = req.body?.subscription ?? req.body;
+    const problem = pushEndpointProblem(subscription?.endpoint);
+    if (problem) throw badRequest(problem);
     const saved = await saveSubscription(pump.id, req.user.id, subscription ?? {});
     if (!saved) throw badRequest("اشتراك الإشعارات غير صالح.");
     res.json({ subscribed: true });

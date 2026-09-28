@@ -158,7 +158,23 @@ export function publicUser(row) {
   };
 }
 
+/**
+ * عنوان الزائر الحقيقي:
+ *  - `req.ip` يأخذ في الحساب الوسيط الموثوق (trust proxy = 1 في index.js).
+ *  - وبقية القيم: نأخذ آخر عنوان في X-Forwarded-For (وهو الذي يضيفه الوسيط)،
+ *    لأن أول قيمة يمكن أن يزيّفها المرسل ليتجاوز حدود المحاولات.
+ */
 export function clientIp(req) {
-  const forwarded = String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
-  return forwarded || req.socket?.remoteAddress || "";
+  if (req?.ip) return String(req.ip);
+  const forwarded = String(req?.headers?.["x-forwarded-for"] ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return forwarded[forwarded.length - 1] || req?.socket?.remoteAddress || "";
+}
+
+/** موثوقية العنوان للتسجيل في سجل التدقيق: فقط IPv4/IPv6 بلا أي رموز */
+export function safeIp(value) {
+  const ip = String(value ?? "").slice(0, 60);
+  return /^[0-9a-fA-F:.]+$/.test(ip) ? ip : "";
 }

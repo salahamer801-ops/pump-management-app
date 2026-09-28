@@ -13,6 +13,7 @@ import {
 } from "../http.js";
 import {
   accountTypeProblem,
+  clientIp,
   createSession,
   hashPassword,
   maskPhone,
@@ -28,10 +29,22 @@ import {
   verifyPassword,
 } from "../security.js";
 import { isValidPhone } from "../security.js";
+import { notifyUser } from "../push.js";
 import { getSettings } from "../settings.js";
 import { ensureBootstrapAdmin } from "../bootstrap.js";
 
 export const authRouter = Router();
+
+/**
+ * حدّ عام لكل عنوان شبكة على مسارات الحساب — يحمي من التخمين الموزّع
+ * (كثير من الأرقام من نفس الجهاز) دون أن يضايق مستخدمي شبكة واحدة.
+ */
+function ipLimit(req, action, limit, windowMs) {
+  const ip = clientIp(req) || "unknown";
+  return rateLimit(`${action}:ip:${ip}`, { limit, windowMs });
+}
+
+const IP_LIMIT_MESSAGE = "محاولات كثيرة من هذا الاتصال — حاول بعد قليل.";
 
 /** المضخات التي يملكها أو ينتمي إليها المستخدم — مع حالة كل علاقة */
 export async function pumpsAndMemberships(userId) {
@@ -125,10 +138,10 @@ authRouter.post(
       throw forbidden("إنشاء الحسابات متوقف حاليًا — تواصل مع مسؤول النظام.", "registration_closed");
     }
 
-    if (!rateLimit(`register:${req.socket?.remoteAddress ?? "ip"}`, { limit: 20, windowMs: 60 * 60 * 1000 })) {
+    if (!rateLimit(`register:${clientIp(req) || "ip"}`, { limit: 20, windowMs: 60 * 60 * 1000 })) {
       throw conflict("محاولات كثيرة — حاول بعد قليل.", "rate_limited");
     }
-
+    if (!ipLimit(req, "register", 60, 60 * 60 * 1000)) throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
     const existing = await q(`SELECT id FROM users WHERE phone = $1`, [cleanPhone]);
     if (existing.rowCount > 0) {
       throw conflict("رقم الهاتف مستخدم مسبقًا — سجّل الدخول أو استعد كلمة المرور.", "phone_taken");
@@ -180,6 +193,8 @@ authRouter.post(
     if (!rateLimit(`login:${cleanPhone}`, { limit: 10, windowMs: 10 * 60 * 1000 })) {
       throw new HttpError429();
     }
+    /* حدّ عام للاتصال: يوقف التخمين الموزّع على أرقام كثيرة من جهاز واحد */
+    if (!ipLimit(req, "login", 60, 10 * 60 * 1000)) throw new HttpError429();
 
     const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
     const userRow = found.rows[0];
@@ -318,6 +333,7 @@ authRouter.post(
     if (!rateLimit(`forgot:${cleanPhone}`, { limit: 3, windowMs: 60 * 60 * 1000 })) {
       throw conflict("طلبات كثيرة لاستعادة كلمة المرور — حاول بعد ساعة.", "rate_limited");
     }
+    if (!ipLimit(req, "forgot", 12, 60 * 60 * 1000)) throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
     const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
     const userRow = found.rows[0];
     const sameName =
@@ -339,7 +355,7 @@ authRouter.post(
     ]);
     await q(
       `INSERT INTO password_resets (user_id, code_hash, expires_at)
-       VALUES ($1,$2, now() + interval '15 minutes')`,
+       VALUES ($1,$2, now() + interval '10 minutes')`,
       [userRow.id, sha256(code)]
     );
     await logAudit(req, {
@@ -352,12 +368,27 @@ authRouter.post(
       source: "auth_screen",
       metadata: { delivery: "manual", phone: maskPhone(cleanPhone) },
     });
+
+    /* تنبيه صاحب الحساب على جواله فورًا: إن لم يكن الطلب منه يعرف بالأمر مباشرة */
+    try {
+      await notifyUser(userRow.id, {
+        title: "طلب استعادة كلمة مرور حسابك",
+        body: "طُلب تعيين كلمة مرور جديدة لحسابك من شاشة الدخول. إن لم يكن هذا طلبك، غيّر كلمة مرورك فورًا.",
+        level: "danger",
+        url: "/",
+        tag: `pwreset-${userRow.id}`,
+      });
+    } catch {
+      /* التنبيه إضافة — لا يُفشل الاستعادة إن تعذّر */
+    }
+
     res.json({
       ok: true,
       delivery: "manual",
       code,
-      expiresInMinutes: 15,
-      warning: "لا توجد خدمة رسائل SMS مربوطة بعد: اكتب الرمز هنا ثم حدّد كلمة مرور جديدة.",
+      expiresInMinutes: 10,
+      warning:
+        "لا توجد خدمة رسائل SMS مربوطة بعد: اكتب الرمز هنا ثم حدّد كلمة مرور جديدة (صلاحية الرمز 10 دقائق).",
     });
   })
 );
@@ -377,6 +408,7 @@ authRouter.post(
     if (!rateLimit(`reset:${cleanPhone}`, { limit: 10, windowMs: 60 * 60 * 1000 })) {
       throw conflict("محاولات كثيرة — حاول بعد قليل.", "rate_limited");
     }
+    if (!ipLimit(req, "reset", 30, 60 * 60 * 1000)) throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
 
     const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
     const userRow = found.rows[0];

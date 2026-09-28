@@ -48,12 +48,41 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
 app.disable("x-powered-by");
-app.set("trust proxy", true);
+/* وسيط واحد موثوق (منصة النشر أو الاستضافة) — فيُحسب عنوان الزائر الحقيقي في req.ip */
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "256kb" }));
 
-app.use((_req, res, next) => {
+/*
+ * ترويسات الحماية لكل رد، و«سياسة أمان المحتوى» على صفحات HTML فقط:
+ *  - السكربتات من الموقع نفسه فقط (لا سكربت مضمّن ولا مورد خارجي).
+ *  - الأنماط والخطوط: الموقع + خطوط Google (الخط المستخدم في الواجهة).
+ *  - الطلبات (fetch/API/العامل الخدمي) من الموقع نفسه فقط.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  if (req.secure || String(req.headers["x-forwarded-proto"] ?? "").includes("https")) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  if (req.method === "GET" || req.method === "HEAD") res.setHeader("Content-Security-Policy", CSP);
   res.setHeader("Cache-Control", "no-store");
   next();
 });

@@ -10,10 +10,10 @@
  */
 import webpush from "web-push";
 import { q } from "./db.js";
-import { newNotifications } from "./push-payload.js";
+import { newNotifications, pushEndpointProblem } from "./push-payload.js";
 
-/* منطق «الإشعارات الجديدة» مُعاد تصديره من وحدة خالصة قابلة للاختبار */
-export { newNotifications };
+/* الدوال الخالصة مُعادة التصدير من وحدة قابلة للاختبار بلا مكتبات */
+export { newNotifications, pushEndpointProblem };
 
 const SETTINGS_KEY = "webpush_vapid";
 
@@ -57,6 +57,7 @@ export async function saveSubscription(pumpId, userId, subscription) {
   const p256dh = String(subscription?.keys?.p256dh ?? "").slice(0, 300);
   const auth = String(subscription?.keys?.auth ?? "").slice(0, 300);
   if (!endpoint || !p256dh || !auth) return false;
+  if (pushEndpointProblem(endpoint)) return false;
 
   await q(
     `INSERT INTO push_subscriptions (pump_id, user_id, endpoint, p256dh, auth, updated_at)
@@ -93,6 +94,49 @@ async function bumpFailure(endpoint) {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * إرسال إشعار لحساب مستخدم بعينه (كل أجهزته المشتركة في أي مضخة).
+ * يُستخدم لتنبيه صاحب الحساب عند طلب استعادة كلمة المرور مثلًا.
+ */
+export async function notifyUser(userId, payload) {
+  let keys;
+  let list;
+  try {
+    keys = await getVapidKeys();
+    list = await q(
+      `SELECT DISTINCT ON (endpoint) endpoint, p256dh, auth FROM push_subscriptions
+       WHERE user_id = $1 ORDER BY endpoint, updated_at DESC LIMIT 50`,
+      [userId]
+    );
+  } catch {
+    return { sent: 0, failed: 0 };
+  }
+  if (!list.rows.length) return { sent: 0, failed: 0 };
+
+  configure(keys);
+  const body = JSON.stringify(payload);
+  let sent = 0;
+  let failed = 0;
+  await Promise.allSettled(
+    list.rows.map(async (row) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+          body,
+          { TTL: 3600, urgency: "high" }
+        );
+        sent += 1;
+      } catch (err) {
+        failed += 1;
+        const code = err?.statusCode;
+        if (code === 404 || code === 410) await dropSubscription(row.endpoint);
+        else await bumpFailure(row.endpoint);
+      }
+    })
+  );
+  return { sent, failed };
 }
 
 /** إرسال إشعار لمساهمي المضخة (بلا المُرسِل نفسه) — يفشل بهدوء ولا يُعطّل الحفظ */

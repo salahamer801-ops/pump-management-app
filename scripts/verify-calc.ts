@@ -35,7 +35,7 @@ import {
 import { applyPayload, payloadFromState } from "../src/domain/serverSync";
 import { mergeReadIds } from "../src/shareholder/officialSync";
 import { urlBase64ToUint8Array } from "../src/shareholder/push";
-import { newNotifications } from "../server/src/push-payload.js";
+import { newNotifications, pushEndpointProblem } from "../server/src/push-payload.js";
 import type {
   AppState,
   BaseRosterMember,
@@ -965,6 +965,29 @@ check(
   "25د) فكّ مفتاح الإشعارات: ٦٥ بايت وأول بايت ٤ (صيغة VAPID الصحيحة)",
   decoded.length === 65 && decoded[0] === 4,
   [decoded.length, decoded[0]]
+);
+
+/* ------------------- 26) حماية الإشعارات: نطاقات معروفة فقط ------------------- */
+
+const endpointCases: Array<[string, boolean]> = [
+  ["https://fcm.googleapis.com/fcm/send/abc", true],
+  ["https://web.push.apple.com/xyz", true],
+  ["https://updates.push.services.mozilla.com/wpush/v2/abc", true],
+  ["https://evil.example.com/collect", false],
+  ["http://fcm.googleapis.com/fcm/send/abc", false],
+  ["not-a-url", false],
+  ["https://fcm.googleapis.com.evil.com/x", false],
+  ["", false],
+];
+const endpointResults = endpointCases.map(([ep]) => pushEndpointProblem(ep) === null);
+check(
+  "26) اشتراك الإشعارات: تُقبل خدمات المتصفحات المعروفة ويُرفض أي عنوان آخر",
+  endpointResults.every((value, i) => value === endpointCases[i][1]),
+  endpointResults
+);
+check(
+  "26ب) النطاق المزيّف (fcm.googleapis.com.evil.com) مرفوض",
+  pushEndpointProblem("https://fcm.googleapis.com.evil.com/x") !== null
 );
 
 console.log(`\n${passed} ناجح · ${failed} فاشل`);
