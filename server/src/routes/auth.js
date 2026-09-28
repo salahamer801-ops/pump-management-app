@@ -338,7 +338,27 @@ async function handleOtpRequest(req, res) {
   const userRow = found.rows[0];
   if (!userRow) throw notFound("لا يوجد حساب بهذا الرقم — تأكّد من الرقم.", "no_match");
 
-  const viaTelegram = telegramReady(userRow, await getSettings(), telegramConfigured());
+  const settings = await getSettings();
+  const viaTelegram = telegramReady(userRow, settings, telegramConfigured());
+
+  /* تشديد اختياري (مفتاح في لوحة المسؤول): لا استعادة إلا لحساب مُتحقَّق من رقمه */
+  if (settings.verification?.requireVerified && !userRow.phone_verified_at) {
+    await logAudit(req, {
+      actorId: userRow.id,
+      actorName: userRow.name,
+      actorRole: userRow.account_type,
+      action: "password.reset_blocked_unverified",
+      entityType: "user",
+      entityId: userRow.id,
+      source: "auth_screen",
+      metadata: { phone: maskPhone(cleanPhone), note: "الحساب غير مُتحقَّق والمفتاح مُفعَّل" },
+    });
+    throw forbidden(
+      "حسابك غير مُتحقَّق من رقمه — اربط تيليجرام من الإعدادات → «تحقّق من رقمي» ثم أعد المحاولة، أو اطلب من مسؤول النظام مساعدتك في الاستعادة.",
+      "unverified_account"
+    );
+  }
+
   if (!viaTelegram) {
     /* الوضع البديل فقط: الاسم كما هو مسجَّل قبل ظهور الرمز على الشاشة */
     const sameName =
