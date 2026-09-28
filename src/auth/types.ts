@@ -34,9 +34,21 @@ export interface RegistrationFlags {
   user: boolean;
 }
 
+export interface VerificationSettings {
+  /** إرسال رمز الاستعادة على تيليجرام للحسابات المربوطة */
+  otpOnTelegram: boolean;
+  /** منع استعادة كلمة المرور إلا لحساب مُتحقَّق (تشديد اختياري) */
+  requireVerified: boolean;
+  /** شريط تنبيه داخل التطبيق لمن لم يُتحقّق من رقمه */
+  promptUnverified: boolean;
+  /** سقف يومي لعدد الرموز (0 = بلا سقف) */
+  dailyLimit: number;
+}
+
 export interface SystemSettings {
   announcement: Announcement;
   registration: RegistrationFlags;
+  verification: VerificationSettings;
 }
 
 /* ------------------------- لوحة مسؤول النظام ------------------------- */
@@ -175,7 +187,14 @@ export interface Membership {
 }
 
 export interface MemberRow extends Membership {
-  user: { id: string; name: string; phoneMasked: string; accountType?: AccountType };
+  user: {
+    id: string;
+    name: string;
+    phoneMasked: string;
+    accountType?: AccountType;
+    /** الرقم مُتحقَّق منه عبر تيليجرام (زر «شارك رقمي») */
+    phoneVerified?: boolean;
+  };
 }
 
 export interface AuditRow {

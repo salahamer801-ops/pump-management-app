@@ -29,6 +29,7 @@ import { formatDateTime } from "../../format";
 import { InstallAppCard } from "../../components/InstallApp";
 import { SyncSettingsCard } from "../SyncPanel";
 import PushCard from "../PushCard";
+import TelegramVerifyCard from "../../components/TelegramVerify";
 
 export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
   const { state, actions } = useShareholder();
@@ -56,6 +57,7 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
       <SyncSettingsCard />
       <InstallAppCard />
       <PushCard />
+      <TelegramVerifyCard />
 
       {/* الملف الشخصي */}
       <Card className="p-5">

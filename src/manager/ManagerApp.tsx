@@ -21,6 +21,7 @@ import { unreadNotifications } from "../domain/rules";
 import { formatClock } from "../domain/util";
 import { cx, Modal, Pill } from "../components/ui";
 import { BrandLogo } from "../components/Brand";
+import VerifyBanner from "../components/VerifyBanner";
 import PumpSetup from "./PumpSetup";
 import Dashboard from "./screens/Dashboard";
 import ActualDayScreen from "./screens/ActualDayScreen";
@@ -99,6 +100,7 @@ export default function ManagerApp({
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl pb-24">
+      <VerifyBanner />
       <header className="sticky top-0 z-30 border-b border-brand-100/70 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">

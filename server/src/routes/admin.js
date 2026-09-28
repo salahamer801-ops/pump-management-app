@@ -464,6 +464,18 @@ adminRouter.patch(
       };
     }
 
+    /* التحقّق من الرقم (تيليجرام — مجاني): مفاتيح يعبّئها مسؤول النظام فقط */
+    if (req.body.verification !== undefined) {
+      const v = req.body.verification ?? {};
+      const limit = Number(v.dailyLimit);
+      patch.verification = {
+        otpOnTelegram: v.otpOnTelegram === undefined ? true : Boolean(v.otpOnTelegram),
+        requireVerified: Boolean(v.requireVerified),
+        promptUnverified: Boolean(v.promptUnverified),
+        dailyLimit: Number.isFinite(limit) ? Math.min(Math.max(Math.round(limit), 0), 2000) : 200,
+      };
+    }
+
     if (Object.keys(patch).length === 0) throw badRequest("لا يوجد تغيير مطلوب.");
 
     const before = await getSettings();

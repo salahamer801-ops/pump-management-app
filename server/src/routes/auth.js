@@ -30,6 +30,8 @@ import {
 } from "../security.js";
 import { isValidPhone } from "../security.js";
 import { notifyUser } from "../push.js";
+import { issueOtp, telegramReady, verifyOtp, redeemTicket, otpRateLimit } from "../otp.js";
+import { isConfigured as telegramConfigured, sendPasswordChanged } from "../telegram.js";
 import { getSettings } from "../settings.js";
 import { ensureBootstrapAdmin } from "../bootstrap.js";
 
@@ -318,58 +320,58 @@ authRouter.post(
 );
 
 /**
- * نسيت كلمة المرور: التحقق برقم الهاتف + الاسم كما هو مسجَّل،
- * ويُخزَّن الرمز مُشفَّرًا (hash) ولا يُقرأ من القاعدة.
- * ملاحظة: لا توجد خدمة رسائل SMS مربوطة بعد، لذلك يُعاد الرمز للمستخدم على الشاشة
- * مع حدّ محاولات وتسجيل تدقيق، ويُلغى كل جلسات الحساب بعد الاستعادة.
+ * رموز التحقّق (مجانية بالكامل):
+ *  - الحساب المربوط بتيليجرام: يصل الرمز إلى محادثة تيليجرام ولا يُعاد في الردّ إطلاقًا.
+ *  - غير المربوط: يُطلب الاسم كما هو مسجَّل ثم يظهر الرمز على الشاشة (الوضع البديل).
+ * الرمز يُخزَّن مُشفَّرًا (SHA-256)، صلاحيته 5 دقائق، 5 محاولات، ويُستهلك مرة واحدة.
  */
-authRouter.post(
-  "/forgot-password",
-  wrap(async (req, res) => {
-    const { phone, name } = req.body ?? {};
-    const cleanPhone = normalizePhone(phone);
-    if (!isValidPhone(cleanPhone)) throw badRequest("رقم الهاتف غير صحيح.");
-    if (nameProblem(name)) throw badRequest("اكتب الاسم كما هو مسجَّل في حسابك.");
-    if (!rateLimit(`forgot:${cleanPhone}`, { limit: 3, windowMs: 60 * 60 * 1000 })) {
-      throw conflict("طلبات كثيرة لاستعادة كلمة المرور — حاول بعد ساعة.", "rate_limited");
-    }
-    if (!ipLimit(req, "forgot", 12, 60 * 60 * 1000)) throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
-    const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
-    const userRow = found.rows[0];
+async function handleOtpRequest(req, res) {
+  const { phone, name } = req.body ?? {};
+  const cleanPhone = normalizePhone(phone);
+  if (!isValidPhone(cleanPhone)) throw badRequest("رقم الهاتف غير صحيح.");
+  if (!rateLimit(`forgot:${cleanPhone}`, { limit: 3, windowMs: 60 * 60 * 1000 })) {
+    throw conflict("طلبات كثيرة لاستعادة كلمة المرور — حاول بعد ساعة.", "rate_limited");
+  }
+  if (!ipLimit(req, "forgot", 12, 60 * 60 * 1000)) throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
+
+  const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
+  const userRow = found.rows[0];
+  if (!userRow) throw notFound("لا يوجد حساب بهذا الرقم — تأكّد من الرقم.", "no_match");
+
+  const viaTelegram = telegramReady(userRow, await getSettings(), telegramConfigured());
+  if (!viaTelegram) {
+    /* الوضع البديل فقط: الاسم كما هو مسجَّل قبل ظهور الرمز على الشاشة */
     const sameName =
-      userRow && userRow.name.trim().replace(/\s+/g, " ") === String(name).trim().replace(/\s+/g, " ");
-    if (!userRow || !sameName) {
+      userRow.name.trim().replace(/\s+/g, " ") === String(name ?? "").trim().replace(/\s+/g, " ");
+    if (!sameName) {
       await logAudit(req, {
         action: "password.reset_request_failed",
         entityType: "user",
-        entityId: userRow ? userRow.id : "",
+        entityId: userRow.id,
         actorRole: "system",
         metadata: { phone: maskPhone(cleanPhone) },
       });
-      throw notFound("لا يوجد حساب مطابق لهذا الرقم والاسم.", "no_match");
+      throw notFound("الاسم لا يطابق صاحب هذا الرقم.", "no_match");
     }
+  }
 
-    const code = newResetCode();
-    await q(`UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, [
-      userRow.id,
-    ]);
-    await q(
-      `INSERT INTO password_resets (user_id, code_hash, expires_at)
-       VALUES ($1,$2, now() + interval '10 minutes')`,
-      [userRow.id, sha256(code)]
-    );
-    await logAudit(req, {
-      actorId: userRow.id,
-      actorName: userRow.name,
-      actorRole: userRow.account_type,
-      action: "password.reset_request",
-      entityType: "user",
-      entityId: userRow.id,
-      source: "auth_screen",
-      metadata: { delivery: "manual", phone: maskPhone(cleanPhone) },
-    });
-
-    /* تنبيه صاحب الحساب على جواله فورًا: إن لم يكن الطلب منه يعرف بالأمر مباشرة */
+  const issued = await issueOtp({
+    user: userRow,
+    purpose: "reset",
+    req,
+    telegramConfigured: telegramConfigured(),
+  });
+  await logAudit(req, {
+    actorId: userRow.id,
+    actorName: userRow.name,
+    actorRole: userRow.account_type,
+    action: "password.reset_request",
+    entityType: "user",
+    entityId: userRow.id,
+    source: issued.channel === "telegram" ? "telegram" : "auth_screen",
+    metadata: { channel: issued.channel, phone: maskPhone(cleanPhone) },
+  });
+  if (issued.channel === "screen") {
     try {
       await notifyUser(userRow.id, {
         title: "طلب استعادة كلمة مرور حسابك",
@@ -379,16 +381,58 @@ authRouter.post(
         tag: `pwreset-${userRow.id}`,
       });
     } catch {
-      /* التنبيه إضافة — لا يُفشل الاستعادة إن تعذّر */
+      /* التنبيه إضافة — لا يُفشل الاستعادة */
     }
+  }
+  res.json({
+    ok: true,
+    channel: issued.channel,
+    expiresInMinutes: issued.expiresInMinutes,
+    warning: issued.warning ?? "",
+    code: issued.code ?? null,
+    hint:
+      issued.channel === "telegram"
+        ? "أرسلنا الرمز إلى محادثتك في تيليجرام."
+        : "اكتب الرمز الظاهر هنا ثم حدّد كلمة مرور جديدة.",
+  });
+}
 
+/** الوضع القديم (للتوافق) — نفس المنطق تمامًا */
+authRouter.post("/forgot-password", wrap(handleOtpRequest));
+/** الواجهة الجديدة */
+authRouter.post("/otp/request", wrap(handleOtpRequest));
+
+authRouter.post(
+  "/otp/verify",
+  wrap(async (req, res) => {
+    const { phone, code } = req.body ?? {};
+    const cleanPhone = normalizePhone(phone);
+    if (!isValidPhone(cleanPhone)) throw badRequest("رقم الهاتف غير صحيح.");
+    if (!rateLimit(`otp-verify:${cleanPhone}`, { limit: 10, windowMs: 60 * 60 * 1000 })) {
+      throw conflict("محاولات كثيرة — حاول بعد قليل.", "rate_limited");
+    }
+    if (!otpRateLimit(req, "otp-verify", 40, 60 * 60 * 1000)) {
+      throw conflict(IP_LIMIT_MESSAGE, "rate_limited");
+    }
+    const found = await q(`SELECT * FROM users WHERE phone = $1`, [cleanPhone]);
+    const userRow = found.rows[0];
+    if (!userRow) throw notFound("لا يوجد حساب بهذا الرقم.", "no_match");
+
+    const result = await verifyOtp({ user: userRow, code, purpose: "reset" });
+    await logAudit(req, {
+      actorId: userRow.id,
+      actorName: userRow.name,
+      actorRole: userRow.account_type,
+      action: "password.otp_verified",
+      entityType: "user",
+      entityId: userRow.id,
+      metadata: { channel: result.channel },
+    });
     res.json({
       ok: true,
-      delivery: "manual",
-      code,
-      expiresInMinutes: 10,
-      warning:
-        "لا توجد خدمة رسائل SMS مربوطة بعد: اكتب الرمز هنا ثم حدّد كلمة مرور جديدة (صلاحية الرمز 10 دقائق).",
+      ticket: result.ticket,
+      expiresInMinutes: result.expiresInMinutes,
+      channel: result.channel,
     });
   })
 );
@@ -396,10 +440,9 @@ authRouter.post(
 authRouter.post(
   "/reset-password",
   wrap(async (req, res) => {
-    const { phone, code, newPassword, confirmPassword } = req.body ?? {};
+    const { phone, code, ticket, newPassword, confirmPassword } = req.body ?? {};
     const cleanPhone = normalizePhone(phone);
     if (!isValidPhone(cleanPhone)) throw badRequest("رقم الهاتف غير صحيح.");
-    if (!/^\d{6}$/.test(String(code ?? "").trim())) throw badRequest("رمز الاستعادة غير صحيح.");
     const pwProblem = passwordProblem(newPassword);
     if (pwProblem) throw badRequest(pwProblem);
     if (String(newPassword) !== String(confirmPassword ?? "")) {
@@ -414,32 +457,32 @@ authRouter.post(
     const userRow = found.rows[0];
     if (!userRow) throw notFound("لا يوجد حساب مطابق لهذا الرقم.", "no_match");
 
-    const reset = await q(
-      `SELECT * FROM password_resets
-        WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() AND attempts < 5
-        ORDER BY created_at DESC LIMIT 1`,
-      [userRow.id]
-    );
-    const row = reset.rows[0];
-    if (!row || row.code_hash !== sha256(String(code).trim())) {
-      if (row) await q(`UPDATE password_resets SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
-      await logAudit(req, {
-        actorId: userRow.id,
-        actorName: userRow.name,
-        actorRole: userRow.account_type,
-        action: "password.reset_failed",
-        entityType: "user",
-        entityId: userRow.id,
-        metadata: { phone: maskPhone(cleanPhone) },
-      });
-      throw badRequest("الرمز غير صحيح أو انتهت صلاحيته.", "bad_code");
+    if (ticket) {
+      /* المسار المعتمد: تذكرة صادرة بعد تحقّق ناجح — تُستهلك مرة واحدة فقط */
+      await redeemTicket(userRow.id, ticket);
+    } else {
+      /* توافق مع الواجهة القديمة: رمز مباشر من الشاشة أو من الجدول القديم */
+      if (!/^\d{6}$/.test(String(code ?? "").trim())) throw badRequest("رمز الاستعادة غير صحيح.");
+      const legacy = await q(
+        `SELECT * FROM password_resets
+          WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() AND attempts < 5
+          ORDER BY created_at DESC LIMIT 1`,
+        [userRow.id]
+      );
+      const row = legacy.rows[0];
+      if (row && row.code_hash === sha256(String(code).trim())) {
+        await q(`UPDATE password_resets SET used_at = now() WHERE id = $1`, [row.id]);
+      } else {
+        if (row) await q(`UPDATE password_resets SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
+        const verified = await verifyOtp({ user: userRow, code, purpose: "reset" });
+        await redeemTicket(userRow.id, verified.ticket);
+      }
     }
 
     await q(`UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`, [
       hashPassword(String(newPassword)),
       userRow.id,
     ]);
-    await q(`UPDATE password_resets SET used_at = now() WHERE id = $1`, [row.id]);
     await revokeAllSessions(userRow.id);
     await logAudit(req, {
       actorId: userRow.id,
@@ -450,6 +493,21 @@ authRouter.post(
       entityId: userRow.id,
       metadata: { note: "أُلغيت كل الجلسات بعد الاستعادة" },
     });
+
+    /* تنبيه أمني مجاني على تيليجرام (إن كان الحساب مربوطًا) */
+    try {
+      const fresh = await q(
+        `SELECT telegram_chat_id, telegram_alerts, name FROM users WHERE id = $1`,
+        [userRow.id]
+      );
+      const link = fresh.rows[0];
+      if (link?.telegram_chat_id && link.telegram_alerts !== false) {
+        await sendPasswordChanged(link.telegram_chat_id, link.name);
+      }
+    } catch {
+      /* التنبيه إضافة لا تُفشل العملية */
+    }
+
     res.json({ ok: true, message: "تم تعيين كلمة مرور جديدة — سجّل الدخول بها." });
   })
-);
+);;

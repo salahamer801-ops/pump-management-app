@@ -22,8 +22,46 @@ const qs = (params: Record<string, string | number | undefined | null>) => {
   return text ? `?${text}` : "";
 };
 
+export interface TelegramAdminStatus {
+  status: {
+    configured: boolean;
+    state: "off" | "ready" | "error";
+    username: string;
+    webhook: string;
+    webhookError: string;
+    pending: number;
+  };
+  counts: {
+    day_count: number;
+    month_count: number;
+    linked_users: number;
+    verified_users: number;
+    total_users: number;
+  };
+  settings: {
+    otpOnTelegram?: boolean;
+    requireVerified?: boolean;
+    promptUnverified?: boolean;
+    dailyLimit?: number;
+  };
+  recent: {
+    id: string;
+    purpose: string;
+    channel: string;
+    status: string;
+    deliveryStatus: string;
+    attempts: number;
+    createdAt: string;
+    phoneMasked: string;
+  }[];
+}
+
 export const adminApi = {
   overview: () => api<AdminOverview>("/api/admin/overview"),
+
+  telegramStatus: () => api<TelegramAdminStatus>("/api/telegram/admin/status"),
+  telegramTest: () => api<{ ok: boolean }>("/api/telegram/admin/test", { method: "POST" }),
+  telegramWebhook: () => api<{ ok: boolean; url: string }>("/api/telegram/admin/webhook", { method: "POST" }),
 
   users: (params: {
     q?: string;

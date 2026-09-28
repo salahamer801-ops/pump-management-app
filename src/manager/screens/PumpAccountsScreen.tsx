@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   UserCheck,
   UserX,
+  BadgeCheck,
   Users,
 } from "lucide-react";
 import { useApp } from "../../store";
@@ -257,8 +258,17 @@ export default function PumpAccountsScreen({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-extrabold text-gray-900 dark:text-white">{row.user.name}</div>
-                    <div className="text-[11px] text-gray-500 dark:text-slate-300" dir="ltr">
-                      {row.user.phoneMasked}
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-300">
+                      <span dir="ltr">{row.user.phoneMasked}</span>
+                      {row.user.phoneVerified ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700"
+                          data-testid={`verified-${row.user.id}`}
+                          title="الرقم مُتحقَّق عبر تيليجرام"
+                        >
+                          <BadgeCheck size={10} /> مُتحقَّق
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <Pill tone="amber">{STATUS_LABEL[row.status]}</Pill>
@@ -301,8 +311,17 @@ export default function PumpAccountsScreen({
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold text-gray-900 dark:text-white">{row.user.name}</div>
-                    <div className="text-[11px] text-gray-400" dir="ltr">
-                      {row.user.phoneMasked}
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                      <span dir="ltr">{row.user.phoneMasked}</span>
+                      {row.user.phoneVerified ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700"
+                          data-testid={`verified-${row.user.id}`}
+                          title="الرقم مُتحقَّق عبر تيليجرام"
+                        >
+                          <BadgeCheck size={10} /> مُتحقَّق
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <Pill

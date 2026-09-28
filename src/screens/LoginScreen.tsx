@@ -3,8 +3,8 @@ import {
   ArrowRight,
   KeyRound,
   LogIn,
+  Send,
   ShieldCheck,
-  Smartphone,
   UserPlus,
   UserRound,
 } from "lucide-react";
@@ -476,27 +476,47 @@ function TypeCard({
 
 /* --------------------------- نسيت كلمة المرور -------------------------- */
 
+/**
+ * الاستعادة صارت على خطوتين:
+ *  1) طلب رمز: إن كان الحساب مربوطًا بتيليجرام يصل الرمز إلى محادثة تيليجرام ولا يُعرض على الشاشة.
+ *     وإن لم يكن مربوطًا، يظهر الرمز هنا كما كان (مع تنبيه أن الربط أجدر).
+ *  2) الرمز + كلمة المرور الجديدة: يُتحقّق من الرمز أولًا ثم تُستهلك «تذكرة» قصيرة لتعيين الكلمة.
+ */
 function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo: (tab: Tab) => void }) {
-  const { forgotPassword, resetPassword } = useAuth();
+  const { requestOtp, verifyOtp, resetPassword } = useAuth();
   const [step, setStep] = useState<"request" | "reset">("request");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [channel, setChannel] = useState<"telegram" | "screen">("screen");
+  const [shownCode, setShownCode] = useState("");
+  const [hint, setHint] = useState("");
   const [issue, setIssue] = useState("");
+  const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sameNew, setSameNew] = useState(false);
+  const [wait, setWait] = useState(0);
+
+  useEffect(() => {
+    if (wait <= 0) return;
+    const timer = window.setInterval(() => setWait((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => window.clearInterval(timer);
+  }, [wait]);
 
   const requestCode = async () => {
     setError("");
-    if (!phone.trim() || !name.trim()) return setError("اكتب رقم الهاتف والاسم كما هما في حسابك.");
+    if (!phone.trim()) return setError("اكتب رقم الهاتف المسجَّل في حسابك.");
     setBusy(true);
     try {
-      const res = await forgotPassword(phone.trim(), name.trim());
-      setCode(res.code);
+      const res = await requestOtp(phone.trim(), name.trim());
+      setChannel(res.channel);
+      setShownCode(res.code ?? "");
+      setHint(res.hint ?? "");
       setIssue(res.warning ?? "");
+      setCode(res.channel === "screen" && res.code ? res.code : "");
+      setWait(60);
       setStep("reset");
     } catch (err) {
       setError(errorText(err));
@@ -507,14 +527,15 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
 
   const doReset = async () => {
     setError("");
-    if (!/^\d{6}$/.test(code.trim())) return setError("اكتب رمز الاستعادة (6 أرقام).");
+    if (!/^\d{6}$/.test(code.trim())) return setError("اكتب رمز التحقّق (6 أرقام).");
     if (newPassword.length < 8) return setError("كلمة المرور الجديدة 8 خانات على الأقل، حرف ورقم.");
     if (newPassword !== confirmPassword) return setError("كلمتا المرور غير متطابقتين.");
     setBusy(true);
     try {
+      const verified = await verifyOtp(phone.trim(), code.trim());
       const message = await resetPassword({
         phone: phone.trim(),
-        code: code.trim(),
+        ticket: verified.ticket,
         newPassword,
         confirmPassword,
       });
@@ -530,8 +551,10 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
     <div className="space-y-4">
       <ErrorBox message={error} />
       <div className="flex items-center gap-2 rounded-2xl bg-sky-50 px-4 py-3 text-[11px] leading-relaxed text-sky-800">
-        <Smartphone size={16} className="shrink-0" />
-        الاستعادة تعتمد على رقم الهاتف والاسم المسجَّل، ويُلغى رمز الجلسة القديم بعد التعيين.
+        <Send size={16} className="shrink-0" />
+        {channel === "telegram" && step === "reset"
+          ? "الرمز يصل إلى محادثتك في تيليجرام — لا يظهر على الشاشة."
+          : "رمز التحقّق يُرسل إلى محادثتك في تيليجرام للحسابات المربوطة، وصلاحيته 5 دقائق. وإن لم يكن الحساب مربوطًا يظهر الرمز هنا مع تنبيه."}
       </div>
 
       <Field label="رقم الهاتف">
@@ -544,7 +567,7 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
           data-testid="forgot-phone"
         />
       </Field>
-      <Field label="الاسم كما هو مسجَّل في الحساب">
+      <Field label="الاسم كما هو مسجَّل (يُطلب فقط إن لم يكن الحساب مربوطًا بتيليجرام)">
         <TextInput
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -555,22 +578,40 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
 
       {step === "reset" ? (
         <>
-          <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <div className="text-[11px] font-bold text-amber-900">رمز الاستعادة الخاص بك</div>
-            <div className="text-center text-2xl font-black tracking-[0.4em] text-amber-900" data-testid="reset-code">
-              {code}
+          {channel === "telegram" ? (
+            <div className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-[11px] font-bold leading-relaxed text-sky-900">
+              <Send size={16} className="mt-0.5 shrink-0" />
+              <span data-testid="otp-telegram-hint">
+                {hint || "أرسلنا الرمز إلى محادثتك في تيليجرام."} صلاحية الرمز {5} دقائق.
+              </span>
             </div>
-            <p className="text-[10px] leading-relaxed text-amber-800">{issue}</p>
-          </div>
-          <Field label="رمز الاستعادة">
+          ) : (
+            <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="text-[11px] font-bold text-amber-900">رمز التحقّق الخاص بك</div>
+              <div className="text-center text-2xl font-black tracking-[0.4em] text-amber-900" data-testid="reset-code">
+                {shownCode}
+              </div>
+              <p className="text-[10px] leading-relaxed text-amber-800">{issue}</p>
+            </div>
+          )}
+          <Field label="رمز التحقّق">
             <TextInput
               value={code}
               onChange={(e) => setCode(e.target.value)}
               inputMode="numeric"
-              aria-label="رمز الاستعادة"
+              aria-label="رمز التحقّق"
               data-testid="reset-code-input"
             />
           </Field>
+          <button
+            type="button"
+            onClick={requestCode}
+            disabled={busy || wait > 0}
+            className="w-full rounded-2xl border border-slate-200 py-2 text-[11px] font-bold text-slate-600 disabled:opacity-50"
+            data-testid="otp-resend"
+          >
+            {wait > 0 ? `إعادة الإرسال بعد ${wait} ثانية` : "أرسل رمزًا جديدًا"}
+          </button>
           <div className="grid grid-cols-2 gap-3">
             <Field label="كلمة المرور الجديدة">
               <TextInput
@@ -606,12 +647,12 @@ function ForgotForm({ onDone, onGo }: { onDone: (message: string) => void; onGo:
             className="w-full py-4"
             data-testid="reset-submit"
           >
-            <KeyRound size={18} /> تعيين كلمة المرور الجديدة
+            <KeyRound size={18} /> {busy ? "جارٍ التحقّق…" : "تحقّق وعيّن كلمة المرور"}
           </Button>
         </>
       ) : (
         <Button onClick={requestCode} disabled={busy} className="w-full py-4" data-testid="forgot-submit">
-          <ArrowRight size={18} /> {busy ? "جارٍ التحقق…" : "تحقّق وأظهر رمز الاستعادة"}
+          <ArrowRight size={18} /> {busy ? "جارٍ الإرسال…" : "أرسل رمز التحقّق"}
         </Button>
       )}
 

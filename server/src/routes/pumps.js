@@ -227,7 +227,8 @@ pumpsRouter.get(
   wrap(async (req, res) => {
     await managerOwnsPump(req);
     const rows = await q(
-      `SELECT m.*, u.name AS user_name, u.phone AS user_phone
+      `SELECT m.*, u.name AS user_name, u.phone AS user_phone,
+              u.phone_verified_at AS user_phone_verified_at
          FROM pump_memberships m JOIN users u ON u.id = m.user_id
         WHERE m.pump_id = $1 AND m.status = 'pending'
         ORDER BY m.requested_at`,
@@ -236,7 +237,12 @@ pumpsRouter.get(
     res.json({
       requests: rows.rows.map((row) => ({
         ...membershipPublic(row),
-        user: { id: row.user_id, name: row.user_name, phoneMasked: maskPhone(row.user_phone) },
+        user: {
+          id: row.user_id,
+          name: row.user_name,
+          phoneMasked: maskPhone(row.user_phone),
+          phoneVerified: Boolean(row.user_phone_verified_at),
+        },
       })),
     });
   })
@@ -248,7 +254,8 @@ pumpsRouter.get(
   wrap(async (req, res) => {
     await managerOwnsPump(req);
     const rows = await q(
-      `SELECT m.*, u.name AS user_name, u.phone AS user_phone, u.account_type AS user_account_type
+      `SELECT m.*, u.name AS user_name, u.phone AS user_phone, u.account_type AS user_account_type,
+              u.phone_verified_at AS user_phone_verified_at
          FROM pump_memberships m JOIN users u ON u.id = m.user_id
         WHERE m.pump_id = $1
         ORDER BY m.requested_at`,
@@ -262,6 +269,7 @@ pumpsRouter.get(
           name: row.user_name,
           phoneMasked: maskPhone(row.user_phone),
           accountType: row.user_account_type,
+          phoneVerified: Boolean(row.user_phone_verified_at),
         },
       })),
     });

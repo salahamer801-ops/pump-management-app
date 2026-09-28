@@ -19,6 +19,7 @@ import { formatDateTime } from "../format";
 import { tr } from "./i18n";
 import { cx, Modal, Pill } from "../components/ui";
 import { BrandLogo } from "../components/Brand";
+import VerifyBanner from "../components/VerifyBanner";
 import { OfficialSyncProvider, useOfficialSync } from "./useOfficialSync";
 import { usePullToRefresh } from "./SyncPanel";
 import { markMyNotificationsRead } from "./officialSync";
@@ -169,6 +170,7 @@ function Shell({
           </div>
         </div>
       </header>
+      <VerifyBanner />
 
       <main className="px-4 py-4">
         {tab === "home" && <HomeScreen onGoTo={goTab} />}

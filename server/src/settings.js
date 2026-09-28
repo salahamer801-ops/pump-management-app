@@ -9,13 +9,27 @@ export const DEFAULT_SETTINGS = {
   announcement: { active: false, tone: "info", text: "" },
   /** فتح/إغلاق إنشاء الحسابات من شاشة الدخول */
   registration: { manager: true, user: true },
+  /**
+   * التحقّق من الرقم عبر تيليجرام — مجاني بالكامل (لا مزوّد مدفوع، لا رسوم لكل رسالة).
+   * otpOnTelegram: إرسال رمز الاستعادة على تيليجرام للحسابات المربوطة.
+   * requireVerified: منع استعادة كلمة المرور إلا لحساب مُتحقَّق (تشديد اختياري).
+   * promptUnverified: إظهار شريط تنبيه داخل التطبيق لمن لم يُتحقّق من رقمه بعد.
+   * dailyLimit: سقف يومي لعدد الرموز (حماية مجانية من سوء الاستخدام).
+   */
+  verification: {
+    otpOnTelegram: true,
+    requireVerified: false,
+    promptUnverified: false,
+    dailyLimit: 200,
+  },
 };
 
 function mergeSettings(rows) {
   const map = new Map(rows.map((r) => [r.key, r.value ?? {}]));
   const announcement = { ...DEFAULT_SETTINGS.announcement, ...(map.get("announcement") ?? {}) };
   const registration = { ...DEFAULT_SETTINGS.registration, ...(map.get("registration") ?? {}) };
-  return { announcement, registration };
+  const verification = { ...DEFAULT_SETTINGS.verification, ...(map.get("verification") ?? {}) };
+  return { announcement, registration, verification };
 }
 
 export async function getSettings() {
@@ -28,6 +42,7 @@ export async function saveSettings(patch, actorId = null) {
   const next = {
     announcement: { ...current.announcement, ...(patch.announcement ?? {}) },
     registration: { ...current.registration, ...(patch.registration ?? {}) },
+    verification: { ...current.verification, ...(patch.verification ?? {}) },
   };
   const upsert = async (key, value) => {
     await q(
@@ -39,5 +54,6 @@ export async function saveSettings(patch, actorId = null) {
   };
   await upsert("announcement", next.announcement);
   await upsert("registration", next.registration);
+  await upsert("verification", next.verification);
   return next;
 }

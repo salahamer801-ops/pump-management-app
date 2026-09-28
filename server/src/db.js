@@ -560,6 +560,62 @@ CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(use
 /* آخر مرة أُرسل فيها إشعار «تحديث عام» لهذه المضخة (لتقليل الإزعاج) */
 ALTER TABLE pump_sync ADD COLUMN IF NOT EXISTS last_notified_at timestamptz;
 
+/*
+ * --------------------- تحقّق الرقم عبر تيليجرام (مجاني بالكامل) ---------------------
+ * لا رسوم ولا مزوّد مدفوع: البوت الرسمي في تيليجرام يرسل رمزًا مُشفَّرًا،
+ * وزر «شارك رقمي» يُثبت أن الرقم يملكه المستخدم فعلًا.
+ */
+
+/* طلبات الربط: رمز مؤقت يُرسل للبوت، ثم رقم مُشارَك من تيليجرام نفسه */
+CREATE TABLE IF NOT EXISTS telegram_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  link_code_hash text NOT NULL,
+  chat_id text,
+  username text NOT NULL DEFAULT '',
+  shared_phone text NOT NULL DEFAULT '',
+  status text NOT NULL DEFAULT 'pending',
+  attempts integer NOT NULL DEFAULT 0,
+  expires_at timestamptz NOT NULL,
+  linked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS telegram_links_user_idx ON telegram_links(user_id, created_at DESC);
+
+/* رموز التحقّق: تُخزَّن مُشفَّرة (hash) ولا تُقرأ من القاعدة، وتُستهلك مرة واحدة */
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phone text NOT NULL DEFAULT '',
+  purpose text NOT NULL DEFAULT 'reset',
+  channel text NOT NULL DEFAULT 'telegram',
+  code_hash text NOT NULL,
+  ticket_hash text,
+  attempts integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'sent',
+  provider_message_id text NOT NULL DEFAULT '',
+  delivery_status text NOT NULL DEFAULT '',
+  ip text NOT NULL DEFAULT '',
+  expires_at timestamptz NOT NULL,
+  ticket_expires_at timestamptz,
+  verified_at timestamptz,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS otp_codes_user_idx ON otp_codes(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS otp_codes_created_idx ON otp_codes(created_at DESC);
+CREATE INDEX IF NOT EXISTS otp_codes_status_idx ON otp_codes(status);
+
+/* حالة التحقّق على الحساب نفسه */
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_username text NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_linked_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_alerts boolean NOT NULL DEFAULT true;
+CREATE UNIQUE INDEX IF NOT EXISTS users_telegram_chat_idx
+  ON users(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL;
+
 `;
 
 let ready = null;

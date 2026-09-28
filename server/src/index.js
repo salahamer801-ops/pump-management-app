@@ -18,6 +18,8 @@ import { auditRouter, pumpsRouter } from "./routes/pumps.js";
 import { adminRouter } from "./routes/admin.js";
 import { operatingRouter } from "./routes/operating.js";
 import { getSettings } from "./settings.js";
+import { ensureWebhook, isConfigured as isTelegramConfigured } from "./telegram.js";
+import { telegramRouter } from "./routes/telegram.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -98,13 +100,18 @@ app.get(
   })
 );
 
-/* إعدادات عامة لشاشة الدخول (الإعلان وفتح التسجيل) — بلا بيانات شخصية */
+/* إعدادات عامة لشاشة الدخول (الإعلان وفتح التسجيل) — بلا بيانات شخصية ولا تفاصيل داخلية */
 app.get(
   "/api/settings/public",
-  wrap(async (_req, res) => res.json(await getSettings()))
+  wrap(async (_req, res) => {
+    const s = await getSettings();
+    /* ما تحتاجه شاشة الدخول فقط: الإعلان وحالة التسجيل */
+    res.json({ announcement: s.announcement, registration: s.registration });
+  })
 );
 
 app.use("/api/auth", authRouter);
+app.use("/api/telegram", telegramRouter);
 app.use("/api/pumps", pumpsRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/admin", adminRouter);
@@ -174,6 +181,17 @@ async function start() {
     console.log("[api] المخطّط جاهز");
   } catch (err) {
     console.error("[api] تعذّر تهيئة المخطّط:", err.message);
+  }
+  /* تثبيت webhook تيليجرام مرة واحدة عند الإقلاع — بلا تعطيل الإقلاع إن فشل */
+  try {
+    if (isTelegramConfigured()) {
+      const hook = await ensureWebhook();
+      console.log(hook.ok ? `[telegram] webhook مثبّت على ${hook.url}` : `[telegram] تعذّر تثبيت webhook: ${hook.error}`);
+    } else {
+      console.log("[telegram] بلا توكن — التحقّق يعمل بالطريقة البديلة (رمز على الشاشة)");
+    }
+  } catch (err) {
+    console.error("[telegram] خطأ غير متوقع عند الإقلاع:", err.message);
   }
 }
 

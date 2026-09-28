@@ -10,6 +10,14 @@ import {
 import { ApiError, api, getToken, setToken } from "./api";
 import type { AccountType, AccountUser, AuthResponse, AuthSession } from "./types";
 
+export interface OtpRequestResult {
+  channel: "telegram" | "screen";
+  code: string | null;
+  warning: string;
+  hint: string;
+  expiresInMinutes: number;
+}
+
 interface AuthValue {
   session: AuthSession | null;
   user: AccountUser | null;
@@ -30,10 +38,14 @@ interface AuthValue {
     newPassword: string;
     confirmPassword: string;
   }) => Promise<string>;
-  forgotPassword: (phone: string, name: string) => Promise<{ code: string; warning: string }>;
+  /** طلب رمز تحقّق: يصل على تيليجرام إن كان الحساب مربوطًا، وإلا يظهر على الشاشة */
+  requestOtp: (phone: string, name?: string) => Promise<OtpRequestResult>;
+  /** التحقّق من الرمز ⇒ تذكرة قصيرة الاستخدام لتعيين كلمة المرور */
+  verifyOtp: (phone: string, code: string) => Promise<{ ticket: string; expiresInMinutes: number }>;
   resetPassword: (input: {
     phone: string;
-    code: string;
+    ticket?: string;
+    code?: string;
     newPassword: string;
     confirmPassword: string;
   }) => Promise<string>;
@@ -140,13 +152,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         return res.message ?? "تم تغيير كلمة المرور — سجّل الدخول من جديد.";
       },
-      forgotPassword: async (phone, name) => {
-        const res = await api<{ code: string; warning: string }>("/api/auth/forgot-password", {
+      requestOtp: async (phone, name = "") => {
+        const res = await api<OtpRequestResult>("/api/auth/otp/request", {
           method: "POST",
           body: { phone, name },
           auth: false,
         });
-        return { code: res.code, warning: res.warning };
+        return {
+          channel: res.channel === "telegram" ? "telegram" : "screen",
+          code: res.code ?? null,
+          warning: res.warning ?? "",
+          hint: res.hint ?? "",
+          expiresInMinutes: res.expiresInMinutes ?? 5,
+        };
+      },
+      verifyOtp: async (phone, code) => {
+        const res = await api<{ ticket: string; expiresInMinutes: number }>("/api/auth/otp/verify", {
+          method: "POST",
+          body: { phone, code },
+          auth: false,
+        });
+        return { ticket: res.ticket, expiresInMinutes: res.expiresInMinutes ?? 10 };
       },
       resetPassword: async (input) => {
         const res = await api<{ message: string }>("/api/auth/reset-password", {

@@ -36,6 +36,20 @@ import { applyPayload, payloadFromState } from "../src/domain/serverSync";
 import { mergeReadIds } from "../src/shareholder/officialSync";
 import { urlBase64ToUint8Array } from "../src/shareholder/push";
 import { newNotifications, pushEndpointProblem } from "../server/src/push-payload.js";
+import {
+  contactPhone,
+  isValidLinkCode,
+  newLinkCode,
+  samePhone,
+  startPayload,
+} from "../server/src/telegram-payload.js";
+import {
+  codeShapeProblem,
+  cooldownLeft,
+  dailyLimitHit,
+  newOtpCode,
+  newTicket,
+} from "../server/src/otp-payload.js";
 import type {
   AppState,
   BaseRosterMember,
@@ -988,6 +1002,46 @@ check(
 check(
   "26ب) النطاق المزيّف (fcm.googleapis.com.evil.com) مرفوض",
   pushEndpointProblem("https://fcm.googleapis.com.evil.com/x") !== null
+);
+
+
+/* ---------------- 27) تيليجرام: قراءة الرسائل وبناء الروابط ---------------- */
+
+check("27) رابط البدء: يُقرأ الرمز بلا لبس", startPayload("/start AB23CD45") === "AB23CD45");
+check("27ب) /start بلا رمز يُقرأ فارغًا (لا خطأ)", startPayload("/start") === "");
+check("27ج) /start مع اسم البوت يعمل", startPayload("/start@MyPumpBot ab23cd45") === "AB23CD45");
+check("27د) نص عادي ليس أمر بدء", startPayload("سلام عليكم") === null);
+check(
+  "27هـ) رمز الربط: 8 خانات من أبجدية بلا لبس",
+  isValidLinkCode(newLinkCode()) && !isValidLinkCode("ABCDIO23") && !isValidLinkCode("ABC")
+);
+check(
+  "27و) الرقم يُقبل فقط من «شارك رقمي» لصاحبه",
+  contactPhone({ contact: { phone_number: "967777123456", user_id: 5 }, from: { id: 5 } }) === "+967777123456" &&
+    contactPhone({ contact: { phone_number: "967777000000", user_id: 9 }, from: { id: 5 } }) === null &&
+    contactPhone({ contact: { phone_number: "967777123456" }, from: { id: 5 } }) === null
+);
+check(
+  "27ز) مطابقة الأرقام تتجاهل مفتاح الدولة والصفر",
+  samePhone("+967777123456", "00967777123456") && samePhone("967777123456", "7777123456") &&
+    !samePhone("+967777123456", "+967733000000")
+);
+
+/* ------------------- 28) رموز التحقّق: الشكل والمهلات والحد ------------------- */
+
+check("28) الرمز ستة أرقام فقط", codeShapeProblem("123456") === null && codeShapeProblem("12345") !== null && codeShapeProblem("12a456") !== null);
+check("28ب) الرمز المولَّد ستة أرقام", /^\d{6}$/.test(newOtpCode()));
+check("28ج) التذكرة طويلة لا تُخمَّن", newTicket().length >= 40);
+const nowMs = Date.now();
+check(
+  "28د) مهلة إعادة الإرسال 60 ثانية",
+  cooldownLeft(new Date(nowMs - 5_000).toISOString(), nowMs) > 0 &&
+    cooldownLeft(new Date(nowMs - 70_000).toISOString(), nowMs) === 0 &&
+    cooldownLeft(null, nowMs) === 0
+);
+check(
+  "28هـ) السقف اليومي يعمل (0 = بلا سقف)",
+  dailyLimitHit(200, 200) && !dailyLimitHit(199, 200) && !dailyLimitHit(10_000, 0)
 );
 
 console.log(`\n${passed} ناجح · ${failed} فاشل`);
