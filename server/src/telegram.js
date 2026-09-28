@@ -124,10 +124,31 @@ export async function deepLink(code) {
   return `https://t.me/${info.username}?start=${encodeURIComponent(code)}`;
 }
 
+/**
+ * أصل الموقع العام — **من البيئة فقط، ولا يُكتب أي نطاق في الكود** (يمكن ربط دومين في أي وقت).
+ *  - Mythex: MYTHEX_WEB_ORIGIN
+ *  - Railway: RAILWAY_PUBLIC_DOMAIN أو RAILWAY_STATIC_URL (يوفّرهما المزوّد تلقائيًا)
+ *  - أي استضافة أخرى: PUBLIC_ORIGIN
+ */
+export function publicOrigin() {
+  const explicit = String(process.env.MYTHEX_WEB_ORIGIN ?? process.env.PUBLIC_ORIGIN ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (/^https:\/\//i.test(explicit)) return explicit;
+
+  const railway = String(process.env.RAILWAY_PUBLIC_DOMAIN ?? process.env.RAILWAY_STATIC_URL ?? "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "");
+  if (railway && !railway.includes(" ")) return `https://${railway}`;
+
+  return "";
+}
+
 /** يُثبّت الـwebhook على عنوان التطبيق الحقيقي (يُستدعى عند الإقلاع وبطلب من اللوحة) */
 export async function ensureWebhook() {
   if (!isConfigured()) return { ok: false, error: "not_configured" };
-  const origin = String(process.env.MYTHEX_WEB_ORIGIN ?? "").trim().replace(/\/+$/, "");
+  const origin = publicOrigin();
   if (!/^https:\/\//.test(origin)) return { ok: false, error: "no_public_origin" };
   const secret = await webhookSecret();
   const url = `${origin}/api/telegram/webhook`;

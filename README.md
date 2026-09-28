@@ -164,15 +164,23 @@ curl http://localhost:3001/api/health   # {"ok":true,"service":"pump-api"}
 
 ### النشر على استضافة الخادم (Railway)
 
-1. اربط خدمة واحدة بمستودع المشروع على `main` — Railway يبني من `Dockerfile` تلقائيًا عند كل رفع.
-2. متغيّرات البيئة: **`DATABASE_URL`** فقط (المنفذ `PORT` يمرّره المزوّد تلقائيًا). لا تُكتب أي قيمة في الكود.
-3. فحص الصحة بعد النشر:
+1. اربط خدمة واحدة بمستودع المشروع على `main` — Railway يبني من `Dockerfile` تلقائيًا عند كل رفع (الواجهة تُبنى داخل الصورة في المرحلة الأولى، فلا حاجة لأمر بناء خارجي).
+2. متغيّرات البيئة:
+   - **`DATABASE_URL`** — من إضافة PostgreSQL في Railway (إلزامي).
+   - `PORT` يمرّره المزوّد تلقائيًا (الكود يقرؤه ويستمع على `0.0.0.0`).
+   - `TELEGRAM_BOT_TOKEN` — اختياري، لتشغيل التحقّق من الرقم عبر تيليجرام.
+   - لا يُكتب أي نطاق في الكود: أصل الموقع العام يُقرأ من `MYTHEX_WEB_ORIGIN` أو `PUBLIC_ORIGIN`، أو يُستنتج تلقائيًا من `RAILWAY_PUBLIC_DOMAIN` / `RAILWAY_STATIC_URL` (لتثبيت webhook تيليجرام).
+3. المسار المقترح لفحص الصحة في لوحة Railway: **`/api/health`**.
+4. فحص بعد النشر:
 
 ```bash
 curl https://<نطاق-الخدمة>/api/health      # {"ok":true,"service":"pump-api"}
 curl https://<نطاق-الخدمة>/api/health/db   # {"ok":true,"db":"..."} — يتأكد من قاعدة البيانات
 curl -I https://<نطاق-الخدمة>/login        # 200 text/html — الصفحة تعمل عند فتحها مباشرة
 ```
+
+**بنية الرابط الواحد (خدمة واحدة):** `/` و`/login` و`/dashboard` و`/settings` وأي مسار واجهة → تطبيق React المبنى (SPA fallback إلى `index.html`)، و`/api/*` → Express، وقاعدة البيانات PostgreSQL من نفس الخادم.
+
 
 ### الاستضافة على المنصة (Mythex)
 
