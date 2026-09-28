@@ -2,6 +2,35 @@
 
 const TOKEN_KEY = "pump-org-token-v1";
 
+/* ============================ عنوان واجهة البرمجة ============================
+ * الموقع يعمل على نفس أصل الخادم، فلا يحتاج شيئًا: كل نداء يبقى نسبيًا "/api/...".
+ * أما تطبيق أندرويد (Capacitor/WebView) فيعمل على أصل محلي، فالنداء النسبي يذهب
+ * إلى الجهاز نفسه ويفشل — لذلك يُضبط وقت البناء:
+ *
+ *     VITE_API_BASE_URL=https://pump-management-app-production.up.railway.app
+ *
+ * فيصبح النداء: <الأساس>/api/auth/login
+ * ولا يتكرر "/api" أبدًا: لو انتهى الأساس بـ "/api" نُنظّفه، ولو كان المسار بلا
+ * "/api" نضيفه.
+ * بلا هذا المتغيّر (المعاينة والنشر على الويب) لا يتغيّر أي سلوك.
+ */
+const RAW_API_BASE = String(import.meta.env.VITE_API_BASE_URL ?? "").trim();
+
+/** الأساس النهائي: بلا شرطة أخيرة وبلا "/api" في آخره */
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, "").replace(/\/api$/i, "");
+
+/** يحوّل مسار الـAPI إلى عنوان كامل عند وجود أساس، وإلا يعيده نسبيًا كما هو */
+export function apiUrl(path: string): string {
+  if (!API_BASE) return path;
+  const raw = String(path ?? "").trim();
+  /* عنوان كامل يُترك كما هو (لا نكرّر الأساس ولا "/api") */
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const withApi =
+    withSlash === "/api" || withSlash.startsWith("/api/") ? withSlash : `/api${withSlash}`;
+  return `${API_BASE}${withApi}`;
+}
+
 export function getToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -46,7 +75,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -76,3 +105,32 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   return (payload ?? {}) as T;
 }
+
+/*
+ * ============================ توجيه باقي نداءات /api ============================
+ * شاشة الدخول، لوحة المسؤول، مزامنة الخادم، تيليجرام، والإشعارات تنادي
+ * fetch("/api/...") مباشرة. عند تحديد أساس (بناء الأندرويد فقط) نحوّل هذه
+ * النداءات النسبية إليه تلقائيًا — بلا تعديل أي ملف آخر.
+ * وبلا أساس لا يعمل هذا التوجيه إطلاقًا، فيبقى سلوك الموقع والمعاينة كما هو.
+ */
+export function installApiBaseShim(): void {
+  if (!API_BASE || typeof window === "undefined" || typeof window.fetch !== "function") return;
+
+  const original = window.fetch.bind(window);
+  const isApiPath = (url: string): boolean => url === "/api" || url.startsWith("/api/");
+
+  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (typeof input === "string" && isApiPath(input)) {
+      return original(apiUrl(input), init);
+    }
+    if (typeof input === "object" && input instanceof URL) {
+      const sameOrigin = input.origin === window.location.origin;
+      if (sameOrigin && isApiPath(input.pathname)) {
+        return original(new URL(apiUrl(input.pathname + input.search)), init);
+      }
+    }
+    return original(input as RequestInfo, init);
+  }) as typeof window.fetch;
+}
+
+installApiBaseShim();

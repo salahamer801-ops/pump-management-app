@@ -89,6 +89,27 @@ app.use((req, res, next) => {
   next();
 });
 
+/*
+ * CORS — الحد الأدنى فقط:
+ *  - الموقع (المعاينة أو المنشور) يعمل على نفس أصل الخادم، فلا يحتاج أي ترويسة.
+ *  - تطبيق أندرويد (Capacitor/WebView) يعمل على أصل محلي، فيحتاج السماح له وحده
+ *    حتى تصله ردود الـAPI من خادم منشور. لا نفتح "*" ولا أي أصل آخر.
+ */
+const APP_LOCAL_ORIGINS = new Set(["capacitor://localhost", "http://localhost", "https://localhost"]);
+
+app.use((req, res, next) => {
+  const origin = String(req.headers.origin ?? "");
+  if (!APP_LOCAL_ORIGINS.has(origin)) return next();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Max-Age", "600");
+  /* طلب تمهيدي (preflight) ينتهي هنا بلا لمس أي مسار */
+  if (req.method === "OPTIONS") return res.status(204).end();
+  return next();
+});
+
 app.get(["/health", "/api/health"], (_req, res) => res.json({ ok: true, service: "pump-api" }));
 
 /* فحص قاعدة البيانات — عام مثل فحص الصحة (يُستخدم في فحوص الاستضافة) */
