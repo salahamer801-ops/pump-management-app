@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Bell,
   CheckCircle2,
   Info,
@@ -287,6 +288,12 @@ export default function AdminSettingsScreen() {
                 الاتصال بالخادم: {tg.status.webhook ? "مُثبّت ✓" : "غير مُثبّت"}
                 {tg.status.webhookError ? ` — آخر خطأ: ${tg.status.webhookError}` : ""}
               </div>
+              {tg.status.otherSite && (
+                <div className="rounded-2xl bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800 sm:col-span-2 dark:bg-amber-900/20 dark:text-amber-200">
+                  <AlertTriangle size={13} className="inline" /> الاتصال مثبَّت على عنوان آخر (بيئة معاينة أو نطاق قديم) —
+                  اضغط «إعادة تثبيت الاتصال» لربطه بهذا الموقع، وإلا توقّف البوت عن الرد عند إغلاق تلك البيئة.
+                </div>
+              )}
             </div>
           )}
 

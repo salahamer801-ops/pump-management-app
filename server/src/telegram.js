@@ -145,11 +145,47 @@ export function publicOrigin() {
   return "";
 }
 
-/** يُثبّت الـwebhook على عنوان التطبيق الحقيقي (يُستدعى عند الإقلاع وبطلب من اللوحة) */
-export async function ensureWebhook() {
+/**
+ * عنوان مولَّد من المنصة (معاينة مؤقتة) — نميّزه بجزئه الأول العشوائي الطويل.
+ * لا نعلّق البوت على عنوان مؤقت: لو انتهت المعاينة توقّف البوت عن الرد بلا سبب ظاهر.
+ */
+const EPHEMERAL_HOST = /^[a-z0-9]{20,}\./i;
+
+function hostOf(url) {
+  return String(url ?? "")
+    .replace(/^https?:\/\//i, "")
+    .split("/")[0]
+    .toLowerCase();
+}
+
+export function isEphemeralOrigin(origin) {
+  return EPHEMERAL_HOST.test(hostOf(origin));
+}
+
+/**
+ * يُثبّت الـwebhook على عنوان التطبيق الحقيقي (يُستدعى عند الإقلاع وبطلب من اللوحة).
+ * القواعد (بلا كتابة أي نطاق في الكود):
+ *  - عنوان المعاينة المؤقتة: لا يُثبَّت عليه تلقائيًا حتى لا يخطف الاتصال من الموقع المنشور.
+ *  - عنوان ثابت: يُثبَّت إن لم يكن هناك اتصال، أو كان الاتصال عليه، أو كان الاتصال مثبَّتًا
+ *    على عنوان معاينة مؤقتة (فيستعيده الموقع الحقيقي). ولا يُسرق اتصال عنوان ثابت آخر.
+ *  - الزر اليدوي في اللوحة يثبّت دائمًا (force).
+ */
+export async function ensureWebhook({ force = false } = {}) {
   if (!isConfigured()) return { ok: false, error: "not_configured" };
   const origin = publicOrigin();
   if (!/^https:\/\//.test(origin)) return { ok: false, error: "no_public_origin" };
+
+  if (!force) {
+    const info = await tgCall("getWebhookInfo");
+    const installed = info.ok ? String(info.result?.url ?? "") : "";
+    if (isEphemeralOrigin(origin)) {
+      return { ok: false, error: "ephemeral_origin", current: installed };
+    }
+    if (installed && !installed.startsWith(`${origin}/`) && !isEphemeralOrigin(installed)) {
+      return { ok: false, error: "other_origin", current: installed };
+    }
+  }
+
   const secret = await webhookSecret();
   const url = `${origin}/api/telegram/webhook`;
   const res = await tgCall("setWebhook", {
@@ -166,13 +202,18 @@ export async function connectionStatus() {
   if (!isConfigured()) return { configured: false, state: "off" };
   const info = await botInfo();
   const hook = await tgCall("getWebhookInfo");
+  const site = publicOrigin();
+  const installed = hook.ok ? String(hook.result?.url ?? "") : "";
   return {
     configured: Boolean(info.username),
     state: info.username ? "ready" : "error",
     username: info.username ?? "",
-    webhook: hook.ok ? String(hook.result?.url ?? "") : "",
+    webhook: installed,
     webhookError: hook.ok ? String(hook.result?.last_error_message ?? "") : String(hook.error ?? ""),
     pending: hook.ok ? Number(hook.result?.pending_update_count ?? 0) : 0,
+    /* عنوان هذا الموقع + هل الاتصال مثبَّت على عنوان آخر (تحذير في اللوحة) */
+    site,
+    otherSite: Boolean(installed && site && hostOf(installed) !== hostOf(site)),
   };
 }
 

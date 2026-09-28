@@ -198,7 +198,8 @@ telegramRouter.post(
   requireAuth,
   requireAdmin,
   wrap(async (req, res) => {
-    const result = await ensureWebhook();
+    /* زر اللوحة: تثبيت صريح بلا شروط */
+    const result = await ensureWebhook({ force: true });
     await logAudit(req, {
       action: "telegram.webhook_setup",
       entityType: "settings",

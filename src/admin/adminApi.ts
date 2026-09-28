@@ -30,6 +30,10 @@ export interface TelegramAdminStatus {
     webhook: string;
     webhookError: string;
     pending: number;
+    /** عنوان هذا الموقع */
+    site?: string;
+    /** الاتصال مثبَّت على عنوان آخر غير هذا الموقع */
+    otherSite?: boolean;
   };
   counts: {
     day_count: number;

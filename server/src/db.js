@@ -39,21 +39,47 @@ function isConnectionError(err) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** استعلام واحد مع إعادة محاولة واحدة عند انقطاع الاتصال (قاعدة نائمة) */
+/**
+ * إعادة المحاولة عند انقطاع الاتصال (القاعدة تنام عند الخمول وتستيقظ عند أول طلب).
+ * المحاولات تتصاعد: 0.4s ثم 1.2s — تكفي لاستيقاظ القاعدة بدل أن يرى المستخدم خطأ.
+ */
+const RETRY_DELAYS = [400, 1200];
+
+/** استعلام واحد (قراءة أو كتابة واحدة) مع إعادات محاولة آمنة */
 export async function q(text, params = []) {
-  try {
-    return await pool.query(text, params);
-  } catch (err) {
-    if (!isConnectionError(err)) throw err;
-    await sleep(400);
-    return pool.query(text, params);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      if (!isConnectionError(err) || attempt >= RETRY_DELAYS.length) throw err;
+      await sleep(RETRY_DELAYS[attempt]);
+    }
   }
 }
 
 export async function withTransaction(fn) {
-  const client = await pool.connect();
+  /*
+   * نحاول فتح الاتصال و«BEGIN» قبل أي كتابة: إن فشل أحدهما فالكتابة لم تبدأ،
+   * فإعادة المحاولة آمنة تمامًا ولا تُكرّر أي أثر. بعد نجاح BEGIN لا نعيد المحاولة.
+   */
+  let client = null;
+  let started = false;
+  for (let attempt = 0; !started; attempt++) {
+    try {
+      if (!client) client = await pool.connect();
+      await client.query("BEGIN");
+      started = true;
+    } catch (err) {
+      if (client) {
+        try { client.release(); } catch { /* ignore */ }
+        client = null;
+      }
+      if (!isConnectionError(err) || attempt >= RETRY_DELAYS.length) throw err;
+      await sleep(RETRY_DELAYS[attempt]);
+    }
+  }
+
   try {
-    await client.query("BEGIN");
     const out = await fn(async (text, params = []) => client.query(text, params));
     await client.query("COMMIT");
     return out;
