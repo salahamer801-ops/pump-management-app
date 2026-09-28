@@ -175,8 +175,18 @@ export default function LoginScreen() {
             <ShieldCheck size={13} />
             دخول آمن — كلمة المرور مُشفَّرة ولا يمكن قراءتها
           </p>
-          <p className="mt-2 text-center text-[11px] text-sky-100/35">
-            برمجة وتطوير: المهندس/ عبدالملك عامر
+          <p className="mt-2 text-center text-[11px] text-sky-100/60">
+            برمجة وتطوير:{" "}
+            <a
+              href="https://www.linkedin.com/in/abdulmalek-saleh-amer-70057226b"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="صفحة المطوّر عبدالملك عامر على LinkedIn"
+              data-testid="developer-linkedin"
+              className="font-bold text-sky-100 underline decoration-sky-200/40 underline-offset-2 transition hover:text-white"
+            >
+              المهندس/ عبدالملك عامر
+            </a>
           </p>
         </div>
       </main>

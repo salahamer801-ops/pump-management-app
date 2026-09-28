@@ -154,7 +154,17 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
             )}
           </p>
           <p className="font-bold text-gray-800 dark:text-white">
-            {t("برمجة وتطوير: المهندس/ عبدالملك عامر", "Developed by: Engineer Abdulmalik Amer")}
+            {t("برمجة وتطوير: ", "Developed by: ")}
+            <a
+              href="https://www.linkedin.com/in/abdulmalek-saleh-amer-70057226b"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("صفحة المطوّر على LinkedIn", "Developer profile on LinkedIn")}
+              data-testid="developer-linkedin"
+              className="text-sky-700 underline decoration-sky-600/40 underline-offset-2 transition hover:text-sky-800 dark:text-sky-300"
+            >
+              {t("المهندس/ عبدالملك عامر", "Engineer Abdulmalik Amer")}
+            </a>
           </p>
         </div>
       </Card>

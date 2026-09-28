@@ -9,8 +9,8 @@ import {
   RefreshCcw,
   Save,
   Pencil,
+  Linkedin,
   SlidersHorizontal,
-  Tractor,
   Trash2,
   Upload,
   Wifi,
@@ -29,11 +29,9 @@ const currencyLabel = (c: Currency) => (c === "YER" ? "ريال يمني" : c ==
 
 export default function SettingsScreen({
   onLogout,
-  userName,
   onSwitchPump,
 }: {
   onLogout: () => void;
-  userName: string;
   /** مفتاح المضخات: تبديل مضخة أو إنشاء أخرى — من هنا فقط، بزر صغير */
   onSwitchPump?: () => void;
 }) {
@@ -288,8 +286,18 @@ export default function SettingsScreen({
           الأساسي، اليوم الفعلي، والسجل الشخصي للمستخدم. كل التعديلات تُسجَّل في سجل تدقيق، والبيانات تُحفظ
           دائمًا (حذف ناعم فقط).
         </p>
-        <div className="flex items-center gap-2 text-[11px] text-gray-400">
-          <Tractor size={13} /> المسؤول الحالي: {userName || "المسؤول"}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[11px] text-gray-500 dark:text-slate-300">
+          <span className="font-bold">برمجة وتطوير: عبدالملك عامر</span>
+          <a
+            href="https://www.linkedin.com/in/abdulmalek-saleh-amer-70057226b"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="صفحة المطوّر عبدالملك عامر على LinkedIn"
+            data-testid="developer-linkedin"
+            className="flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-2.5 py-1 font-bold text-sky-700 transition hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-200"
+          >
+            <Linkedin size={13} /> LinkedIn
+          </a>
         </div>
         <Button variant="ghost" className="w-full" onClick={onLogout}>
           تسجيل الخروج

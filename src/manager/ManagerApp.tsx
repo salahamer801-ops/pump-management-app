@@ -160,7 +160,6 @@ export default function ManagerApp({
         {tab === "settings" && (
           <SettingsScreen
             onLogout={() => void logout()}
-            userName={userName}
             onSwitchPump={onSwitchPump}
           />
         )}
