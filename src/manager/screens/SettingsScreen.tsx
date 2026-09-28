@@ -4,7 +4,6 @@ import {
   Database,
   Download,
   Droplets,
-  Fuel,
   Info,
   KeyRound,
   Moon,
@@ -297,9 +296,6 @@ export default function SettingsScreen({
           }}
         />
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="flex-1" onClick={() => actions.seedDemo()}>
-            <Fuel size={16} /> بيانات تجريبية
-          </Button>
           <Button variant="danger" className="flex-1" onClick={() => setConfirmReset(true)}>
             <Trash2 size={16} /> مسح كل البيانات
           </Button>

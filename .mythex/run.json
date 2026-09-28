@@ -14,14 +14,13 @@
     },
     {
       "name": "api",
-      "command": "PORT=3001 node server/src/index.js",
+      "command": "node server/src/index.js",
       "port": 3001,
       "web": false,
       "setup": "npm --prefix server install --no-audit --no-fund",
       "deploy": {
         "dockerfile": "Dockerfile",
         "context": ".",
-        "runtime": "docker",
         "memoryMb": 512
       }
     }
