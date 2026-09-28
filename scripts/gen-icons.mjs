@@ -27,8 +27,8 @@ const ICONS = [
   "public/icons/apple-touch-icon.png",
   "public/icons/icon-512-maskable.png",
 ];
-/** لون هوية التطبيق المستخرج من الشعار (الأزرق الكحلي) */
-const BRAND_COLOR = "#032a4c";
+/** لون إطار التطبيق الجديد — أزرق مائي متناغم مع المضخة والشعار */
+const BRAND_COLOR = "#0b6e8f";
 /** نصف قطر زوايا الشعار في المصدر (نسبة من الضلع) — يُستخدم لقناع الزوايا */
 const CORNER_RADIUS = 0.25;
 const fromBrand = process.argv.includes("--from-brand");

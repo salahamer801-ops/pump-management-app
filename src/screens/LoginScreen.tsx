@@ -12,7 +12,7 @@ import { useAuth } from "../auth/AuthProvider";
 import type { AccountType } from "../auth/types";
 import { ApiError } from "../auth/api";
 import { Button, Field, TextInput, cx } from "../components/ui";
-import { BRAND_NAME, BrandLogo } from "../components/Brand";
+import { BRAND_NAME, BrandHero } from "../components/Brand";
 
 type Tab = "login" | "register" | "forgot";
 
@@ -87,8 +87,9 @@ export default function LoginScreen() {
         <div className="w-full max-w-md">
           {/* الهوية */}
           <div className="mb-6 flex flex-col items-center text-center">
-            <BrandLogo size={84} rounded="rounded-3xl" className="ring-1 ring-white/25" />
+            <BrandHero className="h-32 w-32 sm:h-36 sm:w-36" />
             <h1 className="mt-4 text-2xl font-black text-white sm:text-[28px]">{BRAND_NAME}</h1>
+            <p className="mt-1 text-xs font-bold text-cyan-100/80">مرحبًا بك — سجّل دخولك لإدارة حصص المياه</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
               {["الديالات", "الأدوار", "الحصص", "الحسابات"].map((item) => (
                 <span
