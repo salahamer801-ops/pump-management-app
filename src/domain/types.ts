@@ -23,8 +23,17 @@ export interface SoftDeletable {
 export type Currency = "YER" | "SAR" | "USD";
 export type EnergyType = "solar" | "diesel" | "hybrid";
 export type Theme = "light" | "dark" | "system";
-/** قوة كتابة النصوص: عادي · قوي · قوي جدًا (تباين أعلى للقراءة في الشمس وعلى الشاشات الباهتة) */
+/**
+ * لون الكتابة وقوّتها:
+ *   auto   = كما صُمّم التطبيق (أسود/رمادي في الفاتح، أبيض/رمادي في الداكن)
+ *   strong / max = نفس اللون لكن أغمق وأوضح (للشاشات الباهتة)
+ *   black / blue / white = لون كتابة صريح يختاره المستخدم
+ */
+export type TextStyle = "auto" | "strong" | "max" | "black" | "blue" | "white";
+/** لون الكتابة=نفس دلالة TextStyle (يُقرأ للتوافق مع الإعدادات القديمة) */
 export type TextStrength = "normal" | "strong" | "max";
+/** لون خلفية التطبيق: عائلات ألوان متناسقة (لكل عائلة نسخة فاتحة وداكنة) */
+export type BackgroundTone = "navy" | "sky" | "green" | "violet" | "sand";
 /** لون التمييز: الأزرار والعناوين والعناصر الفعّالة */
 export type AccentColor = "brand" | "teal" | "violet" | "amber";
 /** حجم الكتابة العام في التطبيق */
@@ -856,8 +865,10 @@ export interface AppSettings {
   language: Language;
   deviceId: string;
   lastSyncAt: string;
-  /** قوة كتابة النصوص (تباين أعلى إن كانت الشاشة باهتة) */
-  textStrength: TextStrength;
+  /** لون الكتابة وقوّتها (تلقائي · قوي · أسود · أزرق · أبيض …) */
+  textStyle: TextStyle;
+  /** لون خلفية التطبيق */
+  background: BackgroundTone;
   /** لون التمييز في الواجهة */
   accent: AccentColor;
   /** حجم الكتابة العام */

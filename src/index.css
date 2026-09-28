@@ -25,12 +25,14 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  /* خلفية متعددة الدرجات (أزرق/بنفسجي/سماوي) بدل الأخضر الأحادي */
-  background:
-    radial-gradient(55rem 26rem at 105% -8%, #dcebff 0%, rgba(220, 235, 255, 0) 62%),
-    radial-gradient(45rem 24rem at -12% 2%, #e8e2ff 0%, rgba(232, 226, 255, 0) 58%),
-    radial-gradient(40rem 22rem at 50% 108%, #d8f6f1 0%, rgba(216, 246, 241, 0) 60%),
-    linear-gradient(180deg, #f6f9ff 0%, #ffffff 45%, #ffffff 100%);
+  /* الخلفية تُبنى من رموز قابلة للتغيير (خيارات المستخدم) مع شفافية خفيفة
+     فتتمازج الطبقات ببعضها بدل أن تكون لونًا صلبًا واحدًا */
+  background-color: var(--bg-base);
+  background-image:
+    radial-gradient(55rem 26rem at 105% -8%, var(--bg-1) 0%, rgba(255, 255, 255, 0) 62%),
+    radial-gradient(45rem 24rem at -12% 2%, var(--bg-2) 0%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(40rem 22rem at 50% 108%, var(--bg-3) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 50%, var(--bg-bottom) 100%);
   background-attachment: fixed;
   color: #1f2937;
   min-height: 100vh;
@@ -38,18 +40,14 @@ body {
 }
 
 .dark body {
-  background:
-    radial-gradient(50rem 24rem at 105% -8%, #10294a 0%, rgba(16, 41, 74, 0) 60%),
-    radial-gradient(42rem 22rem at -12% 2%, #1e1b45 0%, rgba(30, 27, 69, 0) 58%),
-    linear-gradient(180deg, #0e1526 0%, #0b1220 60%, #0b1220 100%);
-  background-attachment: fixed;
   color: #e2e8f0;
 }
 
 /* ==========================================================================
    المظهر والكتابة — خيارات المستخدم (تُضبط كسمات data-* على <html>)
    الفكرة: لا نكتب ألوانًا في المكوّنات؛ نعيد تعريف رموز Tailwind نفسها،
-   فيتغيّر لون الكتابة وحجمها ولون الأزرار في التطبيق كله دفعة واحدة.
+   فيتغيّر لون الكتابة وحجمها ولون الخلفية والأزرار في التطبيق كله دفعة واحدة.
+   الافتراضي (بلا سمات) = شكل التطبيق الأصلي تمامًا بلا أي تغيير.
    ========================================================================== */
 
 /* عناصر المتصفح (الحقول، القوائم، أشرطة التمرير) تتبع الوضع الحالي */
@@ -60,44 +58,211 @@ html.dark {
   color-scheme: dark;
 }
 
-/* ---------- قوة الكتابة: ترفع درجات الرمادي الباهتة ---------- */
-html[data-text="strong"] {
-  --color-gray-400: #6b7280;
-  --color-gray-500: #4b5563;
-  --color-slate-300: #475569;
-  --color-slate-400: #64748b;
+/* ---------------------------------------------------------------------------
+   ١) خلفية التطبيق — عائلات ألوان متناسقة، كل عائلة فاتحة وداكنة
+      والألوان شبه شفافة قليلًا فتتمازج الطبقات وتظهر ناعمة لا صلبة.
+   --------------------------------------------------------------------------- */
+html {
+  /* الافتراضي: أزرق كحلي (خلفية التطبيق المعتادة) */
+  --bg-base: #ffffff;
+  --bg-1: rgba(220, 235, 255, 0.95);
+  --bg-2: rgba(232, 226, 255, 0.9);
+  --bg-3: rgba(216, 246, 241, 0.85);
+  --bg-top: rgba(246, 249, 255, 0.92);
+  --bg-bottom: rgba(255, 255, 255, 0.97);
 }
-html.dark[data-text="strong"] {
-  --color-gray-400: #cbd5e1;
-  --color-gray-500: #e2e8f0;
-  --color-slate-300: #e2e8f0;
-  --color-slate-400: #cbd5e1;
+html.dark {
+  --bg-base: #0b1220;
+  --bg-1: rgba(16, 41, 74, 0.86);
+  --bg-2: rgba(30, 27, 69, 0.8);
+  --bg-3: rgba(14, 46, 66, 0.72);
+  --bg-top: rgba(14, 21, 38, 0.95);
+  --bg-bottom: rgba(11, 18, 32, 0.97);
+}
+/* سماوي */
+html[data-bg="sky"] {
+  --bg-base: #fbfdff;
+  --bg-1: rgba(203, 238, 255, 0.95);
+  --bg-2: rgba(216, 240, 255, 0.9);
+  --bg-3: rgba(198, 245, 250, 0.85);
+  --bg-top: rgba(240, 249, 255, 0.92);
+  --bg-bottom: rgba(252, 254, 255, 0.97);
+}
+html.dark[data-bg="sky"] {
+  --bg-base: #061423;
+  --bg-1: rgba(12, 52, 80, 0.86);
+  --bg-2: rgba(13, 40, 74, 0.8);
+  --bg-3: rgba(10, 55, 70, 0.72);
+  --bg-top: rgba(8, 25, 43, 0.95);
+  --bg-bottom: rgba(6, 20, 35, 0.97);
+}
+/* أخضر هادئ */
+html[data-bg="green"] {
+  --bg-base: #fbfefc;
+  --bg-1: rgba(211, 245, 229, 0.95);
+  --bg-2: rgba(224, 246, 236, 0.9);
+  --bg-3: rgba(203, 245, 238, 0.85);
+  --bg-top: rgba(241, 252, 247, 0.92);
+  --bg-bottom: rgba(251, 255, 253, 0.97);
+}
+html.dark[data-bg="green"] {
+  --bg-base: #061412;
+  --bg-1: rgba(9, 50, 40, 0.86);
+  --bg-2: rgba(11, 46, 44, 0.8);
+  --bg-3: rgba(8, 52, 48, 0.72);
+  --bg-top: rgba(7, 26, 22, 0.95);
+  --bg-bottom: rgba(6, 20, 18, 0.97);
+}
+/* بنفسجي ناعم */
+html[data-bg="violet"] {
+  --bg-base: #fdfcff;
+  --bg-1: rgba(238, 232, 255, 0.95);
+  --bg-2: rgba(246, 232, 255, 0.9);
+  --bg-3: rgba(224, 235, 255, 0.85);
+  --bg-top: rgba(249, 247, 255, 0.92);
+  --bg-bottom: rgba(255, 254, 255, 0.97);
+}
+html.dark[data-bg="violet"] {
+  --bg-base: #100b1e;
+  --bg-1: rgba(46, 28, 78, 0.86);
+  --bg-2: rgba(58, 26, 74, 0.8);
+  --bg-3: rgba(30, 36, 84, 0.72);
+  --bg-top: rgba(21, 14, 38, 0.95);
+  --bg-bottom: rgba(16, 11, 30, 0.97);
+}
+/* رملي دافئ (مريح للعين) */
+html[data-bg="sand"] {
+  --bg-base: #fffdf9;
+  --bg-1: rgba(252, 242, 220, 0.95);
+  --bg-2: rgba(252, 238, 226, 0.9);
+  --bg-3: rgba(246, 244, 226, 0.85);
+  --bg-top: rgba(255, 251, 244, 0.92);
+  --bg-bottom: rgba(255, 253, 249, 0.97);
+}
+html.dark[data-bg="sand"] {
+  --bg-base: #1a140b;
+  --bg-1: rgba(76, 58, 30, 0.86);
+  --bg-2: rgba(74, 52, 34, 0.8);
+  --bg-3: rgba(60, 56, 34, 0.72);
+  --bg-top: rgba(34, 26, 15, 0.95);
+  --bg-bottom: rgba(26, 20, 11, 0.97);
+}
+
+/* ---------------------------------------------------------------------------
+   ٢) لون الكتابة وقوّتها — نعيد تعريف درجات الرمادي/الرصاصي التي تستخدمها
+      الأدوات، بخلط لوني فوق الدرجة الأصلية:
+      تلقائي = بلا خلط · قوي/قوي جدًا = أغمق وأوضح · أسود/أزرق/أبيض = لون صريح
+   --------------------------------------------------------------------------- */
+html {
+  /* الدرجات الأصلية قبل أي تغيير */
+  --nk-gray-300: #d1d5db;
+  --nk-gray-400: #9ca3af;
+  --nk-gray-500: #6b7280;
+  --nk-gray-600: #4b5563;
+  --nk-gray-700: #374151;
+  --nk-gray-800: #1f2937;
+  --nk-gray-900: #111827;
+  --nk-slate-100: #f1f5f9;
+  --nk-slate-200: #e2e8f0;
+  --nk-slate-300: #cbd5e1;
+  --nk-slate-400: #94a3b8;
+  --nk-slate-500: #64748b;
+
+  --ink-mix: 0%;
+  --ink-tint: #000000;
+
+  --color-gray-300: color-mix(in oklab, var(--nk-gray-300) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-400: color-mix(in oklab, var(--nk-gray-400) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-500: color-mix(in oklab, var(--nk-gray-500) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-600: color-mix(in oklab, var(--nk-gray-600) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-700: color-mix(in oklab, var(--nk-gray-700) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-800: color-mix(in oklab, var(--nk-gray-800) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-gray-900: color-mix(in oklab, var(--nk-gray-900) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-slate-100: color-mix(in oklab, var(--nk-slate-100) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-slate-200: color-mix(in oklab, var(--nk-slate-200) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-slate-300: color-mix(in oklab, var(--nk-slate-300) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-slate-400: color-mix(in oklab, var(--nk-slate-400) calc(100% - var(--ink-mix)), var(--ink-tint));
+  --color-slate-500: color-mix(in oklab, var(--nk-slate-500) calc(100% - var(--ink-mix)), var(--ink-tint));
+}
+
+/* قوي · قوي جدًا */
+html[data-text="strong"] {
+  --ink-mix: 30%;
+  --ink-tint: #0b1220;
 }
 html[data-text="max"] {
-  --color-gray-400: #374151;
-  --color-gray-500: #1f2937;
-  --color-gray-600: #111827;
-  --color-slate-300: #1e293b;
-  --color-slate-400: #334155;
+  --ink-mix: 52%;
+  --ink-tint: #030712;
+}
+html.dark[data-text="strong"] {
+  --ink-mix: 38%;
+  --ink-tint: #f8fafc;
 }
 html.dark[data-text="max"] {
-  --color-gray-400: #f8fafc;
-  --color-gray-500: #ffffff;
-  --color-slate-300: #ffffff;
-  --color-slate-400: #f1f5f9;
+  --ink-mix: 60%;
+  --ink-tint: #ffffff;
 }
+/* أسود */
+html[data-text="black"] {
+  --ink-mix: 62%;
+  --ink-tint: #000000;
+}
+html.dark[data-text="black"] {
+  --ink-mix: 70%;
+  --ink-tint: #0b1220;
+}
+/* أزرق */
+html[data-text="blue"] {
+  --ink-mix: 55%;
+  --ink-tint: #0b3f8f;
+}
+html.dark[data-text="blue"] {
+  --ink-mix: 55%;
+  --ink-tint: #7cc4ff;
+}
+/* أبيض */
+html[data-text="white"] {
+  --ink-mix: 75%;
+  --ink-tint: #ffffff;
+}
+html.dark[data-text="white"] {
+  --ink-mix: 84%;
+  --ink-tint: #ffffff;
+}
+
+/* اللون الأساسي لنص الصفحة نفسه */
 html[data-text="strong"] body {
   color: #111827;
 }
 html[data-text="max"] body {
   color: #030712;
 }
+html[data-text="black"] body {
+  color: #000000;
+}
+html[data-text="blue"] body {
+  color: #0b3f8f;
+}
+html[data-text="white"] body {
+  color: #ffffff;
+}
 html.dark[data-text="strong"] body,
 html.dark[data-text="max"] body {
   color: #f8fafc;
 }
+html.dark[data-text="black"] body {
+  color: #050b18;
+}
+html.dark[data-text="blue"] body {
+  color: #dbeafe;
+}
+html.dark[data-text="white"] body {
+  color: #ffffff;
+}
 
-/* ---------- لون التمييز: يعيد تعريف تدرّج الهوية (brand) ---------- */
+/* ---------------------------------------------------------------------------
+   ٣) لون التمييز: يعيد تعريف تدرّج الهوية (brand)
+   --------------------------------------------------------------------------- */
 html[data-accent="teal"] {
   --color-brand-50: #effcf9;
   --color-brand-100: #cbf7ef;
@@ -135,7 +300,9 @@ html[data-accent="amber"] {
   --color-brand-900: #78350f;
 }
 
-/* ---------- حجم الكتابة العام ---------- */
+/* ---------------------------------------------------------------------------
+   ٤) حجم الكتابة العام
+   --------------------------------------------------------------------------- */
 html[data-font="sm"] {
   font-size: 15px;
 }

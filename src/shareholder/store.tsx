@@ -19,7 +19,11 @@ import type {
   ShareholderTurn,
   Theme,
 } from "./types";
-import type { Appearance } from "../domain/appearance";
+import {
+  normalizeBackground,
+  normalizeTextStyle,
+  type Appearance,
+} from "../domain/appearance";
 import { uid } from "./calc";
 
 const STORAGE_KEY = "pump-org-shareholder-v2";
@@ -276,7 +280,7 @@ function defaultProfile(): ShareholderProfile {
 }
 
 function defaultSettings(): ShareholderSettings {
-  return { theme: "light", language: "ar", textStrength: "normal", accent: "brand", fontSize: "md" };
+  return { theme: "light", language: "ar", textStyle: "auto", background: "navy", accent: "brand", fontSize: "md" };
 }
 
 export function emptyState(profile?: ShareholderProfile): ShareholderState {
@@ -303,8 +307,10 @@ function migrate(raw: unknown): ShareholderState {
   const settings: ShareholderSettings = {
     theme: obj.settings?.theme ?? "light",
     language: obj.settings?.language ?? "ar",
-    /* إعدادات المظهر الجديدة: تُضاف للبيانات القديمة بقيم افتراضية بلا حذف أي شيء */
-    textStrength: obj.settings?.textStrength ?? "normal",
+    /* إعدادات المظهر: تُضاف للبيانات القديمة بقيم افتراضية بلا حذف أي شيء،
+       و«قوة الكتابة» القديمة تُحوَّل إلى «لون الكتابة وقوّتها» */
+    textStyle: normalizeTextStyle(obj.settings ?? {}),
+    background: normalizeBackground(obj.settings?.background),
     accent: obj.settings?.accent ?? "brand",
     fontSize: obj.settings?.fontSize ?? "md",
   };

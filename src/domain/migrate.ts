@@ -26,6 +26,7 @@ import type {
 import { addDaysISO, durationMin, isoToShort, minutesToTime, timeToMinutes, todayISO, uid } from "./util";
 import { computeUsageDraft, isoRangeDays } from "./rules";
 import { generatePumpCode } from "../lib/ids";
+import { normalizeBackground, normalizeTextStyle } from "./appearance";
 
 export function emptyState(): AppState {
   return {
@@ -59,7 +60,8 @@ export function emptyState(): AppState {
       language: "ar",
       deviceId: uid("dev"),
       lastSyncAt: "",
-      textStrength: "normal",
+      textStyle: "auto",
+      background: "navy",
       accent: "brand",
       fontSize: "md",
     },
@@ -393,7 +395,16 @@ export function normalizeState(
     transferEvents: input.transferEvents ?? [],
     corrections: input.corrections ?? [],
     counters: { ...base.counters, ...input.counters, ...linked.counters },
-    settings: { ...base.settings, ...input.settings },
+    /* ترحيل آمن: من كان عنده «قوة الكتابة» القديمة تُحوَّل إلى «لون الكتابة وقوّتها» */
+    settings: (() => {
+      const merged = { ...base.settings, ...input.settings };
+      const legacy = input.settings as { textStyle?: unknown; textStrength?: unknown } | undefined;
+      return {
+        ...merged,
+        textStyle: normalizeTextStyle(legacy ?? merged),
+        background: normalizeBackground(merged.background),
+      };
+    })(),
     shareholders: (input.shareholders ?? []).map((s) => ({
       ...s,
       useStatus: s.useStatus ?? "continuing",

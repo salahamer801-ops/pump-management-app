@@ -1,9 +1,10 @@
 import type {
   AccentColor,
+  BackgroundTone,
   Currency,
   FontSize,
   Language,
-  TextStrength,
+  TextStyle,
   Theme,
 } from "../domain/types";
 
@@ -108,8 +109,10 @@ export type { Theme, Language };
 export interface ShareholderSettings {
   theme: Theme;
   language: Language;
-  /** قوة كتابة النصوص (تباين أعلى إن كانت الشاشة باهتة) */
-  textStrength: TextStrength;
+  /** لون الكتابة وقوّتها */
+  textStyle: TextStyle;
+  /** لون خلفية التطبيق */
+  background: BackgroundTone;
   /** لون التمييز في الواجهة */
   accent: AccentColor;
   /** حجم الكتابة العام */
