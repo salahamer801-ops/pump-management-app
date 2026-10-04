@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"تنظيم المضخات"},{"path":"/login","title":"تسجيل الدخول"},{"path":"/dashboard","title":"لوحة التحكم"},{"path":"/settings","title":"الإعدادات"},{"path":"/pump/:pumpId","title":"المضخة"}]}

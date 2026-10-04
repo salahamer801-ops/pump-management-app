@@ -62,6 +62,8 @@ export default defineConfig(({ mode }) => {
   return {
     /* الواجهة تصل إلى خدماتها عبر مسار نسبي /api — نفس الأصل في المعاينة والمنشور */
     server: {
+      /* يسمح باسم المضيف العام الذي توفره بيئة Sandbox للمعاينة */
+      allowedHosts: true,
       proxy: {
         "/api": {
           target: "http://127.0.0.1:3001",
