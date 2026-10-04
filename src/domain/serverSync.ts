@@ -32,6 +32,7 @@ export interface OperatingMeta {
   version: number;
   migratedAt: string | null;
   migrationSource: string;
+  dataClearedAt: string | null;
   lastPushAt: string | null;
   serverTime: string;
 }
@@ -400,14 +401,17 @@ function settingsToPump(state: AppState, settings: Record<string, unknown>): App
  * القاعدة: ما يوجد على الخادم يحلّ محل المحلي (الخادم رسمي)، وما لا يوجد فيه يبقى محليًا.
  */
 export function applyPayload(state: AppState, payload: OperatingResponse | OperatingPayload): AppState {
+  const official = "meta" in payload && "pump" in payload;
   const take = <T,>(serverRows: unknown, local: T[]): T[] => {
     const rows = asRows<T>(serverRows);
-    return rows.length > 0 ? rows : local;
+    /* PostgreSQL هو المصدر الرسمي: المصفوفة الفارغة تعني حذفًا، لا «احتفظ بالمحلي». */
+    return official ? rows : rows.length > 0 ? rows : local;
   };
-
-  const pump = "settings" in payload && payload.settings
-    ? settingsToPump(state, payload.settings as Record<string, unknown>)
-    : state.pump;
+  const pump = official
+    ? pumpFromOfficial(payload as OperatingResponse, payload.pump.id, payload.pump.name, payload.pump.pumpCode)
+    : "settings" in payload && payload.settings
+      ? settingsToPump(state, payload.settings as Record<string, unknown>)
+      : state.pump;
 
   return {
     ...state,
@@ -442,11 +446,11 @@ export function applyPayload(state: AppState, payload: OperatingResponse | Opera
     operatorRecords: take(payload.operatorRecords, state.operatorRecords),
     personalRecords: take(payload.personalRecords, state.personalRecords),
     /* المالية و«الكيانات المحفوظة كما هي» تُستعاد على جهاز لا سجل فيه، ولا تُستبدل سجلًا قائمًا */
-    ...financeMerge(state, payload),
+    ...financeMerge(state, payload, official),
     auditLogs: state.auditLogs,
     settings: state.settings,
     counters: state.counters,
-    ...extraMerge(state, payload),
+    ...extraMerge(state, payload, official),
   };
 }
 
@@ -456,19 +460,20 @@ export function applyPayload(state: AppState, payload: OperatingResponse | Opera
  */
 function financeMerge(
   state: AppState,
-  payload: OperatingPayload
+  payload: OperatingPayload,
+  official = false
 ): Pick<AppState, "payments" | "debts" | "transactions"> {
   const keepLocal = {
     payments: state.payments,
     debts: state.debts,
     transactions: state.transactions,
   };
-  if (state.payments.length > 0 || state.debts.length > 0 || state.transactions.length > 0) return keepLocal;
+  if (!official && (state.payments.length > 0 || state.debts.length > 0 || state.transactions.length > 0)) return keepLocal;
   const fromServer = financeFromPayload(payload);
   return {
-    payments: fromServer.payments.length > 0 ? fromServer.payments : state.payments,
-    debts: fromServer.debts.length > 0 ? fromServer.debts : state.debts,
-    transactions: fromServer.transactions.length > 0 ? fromServer.transactions : state.transactions,
+    payments: official ? fromServer.payments : fromServer.payments.length > 0 ? fromServer.payments : state.payments,
+    debts: official ? fromServer.debts : fromServer.debts.length > 0 ? fromServer.debts : state.debts,
+    transactions: official ? fromServer.transactions : fromServer.transactions.length > 0 ? fromServer.transactions : state.transactions,
   };
 }
 
@@ -476,7 +481,7 @@ function financeMerge(
  * كيانات تُحفظ على الخادم كما هي (حقوق، تسويات، تصحيحات، تعارضات، تحويلات، عدّادات):
  * تُستعاد على جهاز خالٍ منها، ولا تلمس ما هو موجود على الجهاز.
  */
-function extraMerge(state: AppState, payload: OperatingPayload): Partial<AppState> {
+function extraMerge(state: AppState, payload: OperatingPayload, official = false): Partial<AppState> {
   const extra = (payload as { extra?: Record<string, unknown> }).extra;
   if (!extra || typeof extra !== "object") return {};
   const out: Partial<AppState> = {};
@@ -493,12 +498,16 @@ function extraMerge(state: AppState, payload: OperatingPayload): Partial<AppStat
   for (const key of keys) {
     const local = state[key] as unknown;
     const remote = extra[key];
-    if (Array.isArray(local) && local.length === 0 && Array.isArray(remote) && remote.length > 0) {
+    if (official) {
+      (out as Record<string, unknown>)[key] = Array.isArray(remote) ? remote : [];
+    } else if (Array.isArray(local) && local.length === 0 && Array.isArray(remote) && remote.length > 0) {
       (out as Record<string, unknown>)[key] = remote;
     }
   }
   const counters = extra.counters as AppState["counters"] | undefined;
-  if (counters && typeof counters === "object") {
+  if (official && (!counters || typeof counters !== "object")) {
+    out.counters = { diala: 1, round: 1 };
+  } else if (counters && typeof counters === "object") {
     if ((state.counters?.diala ?? 0) === 0 && (state.counters?.round ?? 0) === 0) {
       out.counters = { diala: Number(counters.diala) || 0, round: Number(counters.round) || 0 };
     }

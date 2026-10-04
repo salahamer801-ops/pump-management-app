@@ -524,6 +524,7 @@ async function readOperating(pumpId, userId) {
       version: syncRow ? Number(syncRow.version) : 0,
       migratedAt: syncRow?.migrated_at ?? null,
       migrationSource: syncRow?.migration_source ?? "",
+      dataClearedAt: syncRow?.data_cleared_at ?? null,
       lastPushAt: syncRow?.last_push_at ?? null,
       serverTime: nowIso(),
     },
@@ -792,14 +793,15 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
     }
 
     await tx(
-      `INSERT INTO pump_sync (pump_id, version, last_push_at, last_push_by, migrated_at, migration_source, updated_at)
-       VALUES ($1, 1, now(), $2, CASE WHEN $4 THEN now() ELSE NULL END, $3, now())
+      `INSERT INTO pump_sync (pump_id, version, last_push_at, last_push_by, migrated_at, migration_source, data_cleared_at, updated_at)
+       VALUES ($1, 1, now(), $2, CASE WHEN $4 THEN now() ELSE NULL END, $3, NULL, now())
        ON CONFLICT (pump_id) DO UPDATE SET
          version = pump_sync.version + 1,
          last_push_at = now(),
          last_push_by = EXCLUDED.last_push_by,
          migrated_at = COALESCE(pump_sync.migrated_at, EXCLUDED.migrated_at),
          migration_source = CASE WHEN EXCLUDED.migration_source <> '' THEN EXCLUDED.migration_source ELSE pump_sync.migration_source END,
+         data_cleared_at = NULL,
          updated_at = now()`,
       [pump.id, req.user.id, source, migration]
     );
@@ -952,7 +954,20 @@ operatingRouter.delete(
         );
       }
       await tx(`DELETE FROM pump_settings WHERE pump_id = $1`, [pump.id]);
-      await tx(`DELETE FROM pump_sync WHERE pump_id = $1`, [pump.id]);
+      await tx(
+        `INSERT INTO pump_sync (pump_id, version, migration_source, data_cleared_at, extra, updated_at)
+         VALUES ($1, 1, 'manager-reset', now(), '{}'::jsonb, now())
+         ON CONFLICT (pump_id) DO UPDATE SET
+           version = pump_sync.version + 1,
+           last_push_at = now(),
+           last_push_by = $2,
+           migrated_at = NULL,
+           migration_source = 'manager-reset',
+           data_cleared_at = now(),
+           extra = '{}'::jsonb,
+           updated_at = now()`,
+        [pump.id, req.user.id]
+      );
     });
     await logAudit(req, {
       action: "operating.reset",

@@ -281,12 +281,16 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex min-h-0 items-end justify-center overscroll-contain sm:items-center">
+    <div
+      className="fixed inset-0 z-50 flex h-[100dvh] min-h-[100svh] min-w-0 items-end justify-center overflow-hidden overscroll-none px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative z-10 flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-3xl animate-fade-up dark:bg-slate-800">
+      <div className="relative z-10 flex max-h-full min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-3xl animate-fade-up dark:bg-slate-800">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 pb-3 pt-[max(1.25rem,env(safe-area-inset-top))] dark:border-slate-700">
           <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">{title}</h3>
           <button
@@ -297,7 +301,10 @@ export function Modal({
             <X size={20} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4"
+          style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+        >
           {children}
         </div>
       </div>

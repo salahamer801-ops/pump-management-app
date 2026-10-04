@@ -164,6 +164,19 @@ export function saveOfficialMeta(pumpId: string, patch: Partial<OfficialMeta>): 
   return next;
 }
 
+/** يمسح ذاكرة المضخة من الجهاز فقط؛ لا يمسح النسخ الاحتياطية التاريخية. */
+export function clearManagerCaches(pumpId: string, storageKey?: string): void {
+  try {
+    if (storageKey) localStorage.removeItem(storageKey);
+    localStorage.removeItem(managerStorageKey(pumpId));
+    localStorage.removeItem(officialStorageKey(pumpId));
+    localStorage.removeItem(officialMetaKey(pumpId));
+    localStorage.removeItem(`pump-org-migrated::${pumpId}`);
+  } catch {
+    /* ignore storage failures; server remains authoritative */
+  }
+}
+
 /** أحدث وقت تحديث ناجح بين كل المضخات المرتبطة (للمؤشر العام) */
 export function latestOfficialSyncAt(pumpIds: readonly string[]): string | null {
   let best: string | null = null;

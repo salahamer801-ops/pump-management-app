@@ -548,9 +548,11 @@ CREATE TABLE IF NOT EXISTS pump_sync (
   last_push_by uuid,
   migrated_at timestamptz,
   migration_source text NOT NULL DEFAULT '',
+  data_cleared_at timestamptz,
   extra jsonb NOT NULL DEFAULT '{}'::jsonb,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE pump_sync ADD COLUMN IF NOT EXISTS data_cleared_at timestamptz;
 
 /*
  * تمييز إشعارات المسؤول كمقروءة — لكل مستخدم على حدة.

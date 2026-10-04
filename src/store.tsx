@@ -80,7 +80,11 @@ import {
   responseHasOperatingData,
 } from "./domain/serverSync";
 import { getToken } from "./auth/api";
-import { LEGACY_MANAGER_STORAGE_KEY as LEGACY_KEY, MANAGER_STORAGE_KEY as STORAGE_KEY } from "./domain/storage";
+import {
+  clearManagerCaches,
+  LEGACY_MANAGER_STORAGE_KEY as LEGACY_KEY,
+  MANAGER_STORAGE_KEY as STORAGE_KEY,
+} from "./domain/storage";
 
 /* --------------------------------- الأفعال ------------------------------ */
 
@@ -2782,6 +2786,7 @@ export function AppProvider({
 
       const localHasData = hasOperatingData(local);
       const serverHasData = responseHasOperatingData(remote);
+      const serverWasCleared = Boolean(remote.meta.dataClearedAt);
       /* سجل مضخة أُنشئ على هذا الجهاز (معرّفه محلي لا معرّف الخادم) = إعدادات يملكها الجهاز */
       const ownLocalPump = Boolean(local.pump && local.pump.id !== remote.pump.id);
 
@@ -2796,6 +2801,17 @@ export function AppProvider({
           /* لا نُفشل المزامنة إن امتلأ التخزين */
         }
       };
+
+      if (serverWasCleared) {
+        /* علامة حذف رسمية: لا نرحّل أي cache قديم إلى الخادم بعد إعادة الفتح. */
+        const clean = applyServerPumpIdentity(emptyState(), remote);
+        skipPushRef.current = true;
+        stateRef.current = clean;
+        dispatch({ type: "IMPORT", state: { ...clean, version: 3 } });
+        migratedRef.current = true;
+        setSyncState("synced");
+        return true;
+      }
 
       if (!serverHasData && (localHasData || ownLocalPump)) {
         /* ترحيل آمن: نسخة احتياطية محلية أولًا، ثم الرفع، ثم علامة ترحيل — بلا حذف أي شيء */
@@ -3036,6 +3052,8 @@ export function AppProvider({
         /* بعد نجاح الحذف الرسمي: نظف الحالة المحلية ولا ترسل لقطة فارغة مجددًا. */
         skipPushRef.current = true;
         migratedRef.current = false;
+        stateRef.current = emptyState();
+        if (serverPumpIdRef.current) clearManagerCaches(serverPumpIdRef.current, storageKey);
         serverPumpIdRef.current = null;
         versionRef.current = 0;
         setSyncState("local");
