@@ -29,7 +29,8 @@ export function telegramReady(user, settings, configured) {
   return Boolean(
     settings?.verification?.otpOnTelegram !== false &&
       configured &&
-      user?.telegram_chat_id
+      user?.telegram_chat_id &&
+      user?.phone_verified_at
   );
 }
 
@@ -91,18 +92,12 @@ export async function issueOtp({ user, purpose = "reset", req = null, telegramCo
 
   const sent = await sendOtp(user.telegram_chat_id, code, purpose);
   if (!sent.ok) {
-    /* فشل الإرسال لا يحجب المستخدم: نعود للوضع البديل مع تسجيل الحالة */
+    /* لا نعيد الرمز إلى شاشة الدخول عند فشل القناة الموثوقة. */
     await q(
       `UPDATE otp_codes SET channel = 'screen', status = 'failed', delivery_status = $2 WHERE id = $1`,
       [rowId, String(sent.error ?? "send_failed").slice(0, 60)]
     );
-    return {
-      id: rowId,
-      channel: "screen",
-      code,
-      warning: "تعذّر إرسال الرمز على تيليجرام الآن، لذلك ظهر هنا.",
-      expiresInMinutes: OTP_MINUTES,
-    };
+    throw conflict("تعذّر إرسال رمز التحقّق إلى تيليجرام. حاول لاحقًا أو تواصل مع مسؤول النظام.", "delivery_failed");
   }
 
   await q(
@@ -113,11 +108,11 @@ export async function issueOtp({ user, purpose = "reset", req = null, telegramCo
 }
 
 /** التحقّق من الرمز وإصدار تذكرة قصيرة الاستخدام */
-export async function verifyOtp({ user, code, purpose = "reset" }) {
+export async function verifyOtp({ user, code, purpose = "reset", run = q }) {
   const problem = codeShapeProblem(code);
   if (problem) throw badRequest(problem, "bad_code_shape");
 
-  const res = await q(
+  const res = await run(
     `SELECT * FROM otp_codes
       WHERE user_id = $1 AND purpose = $2 AND used_at IS NULL AND verified_at IS NULL
         AND expires_at > now() AND attempts < ${MAX_ATTEMPTS}
@@ -128,7 +123,7 @@ export async function verifyOtp({ user, code, purpose = "reset" }) {
   if (!row) throw badRequest("الرمز غير صحيح أو انتهت صلاحيته — اطلب رمزًا جديدًا.", "bad_code");
 
   if (row.code_hash !== sha256(String(code).trim())) {
-    await q(`UPDATE otp_codes SET attempts = attempts + 1, status = 'wrong_code' WHERE id = $1`, [row.id]);
+    await run(`UPDATE otp_codes SET attempts = attempts + 1, status = 'wrong_code' WHERE id = $1`, [row.id]);
     const left = Math.max(0, MAX_ATTEMPTS - (row.attempts + 1));
     throw badRequest(
       left > 0 ? `الرمز غير صحيح — بقي ${left} محاولة.` : "الرمز غير صحيح — اطلب رمزًا جديدًا.",
@@ -137,7 +132,7 @@ export async function verifyOtp({ user, code, purpose = "reset" }) {
   }
 
   const ticket = newTicket();
-  await q(
+  await run(
     `UPDATE otp_codes
         SET verified_at = now(), status = 'verified', ticket_hash = $2,
             ticket_expires_at = now() + interval '${TICKET_MINUTES} minutes'
@@ -148,10 +143,10 @@ export async function verifyOtp({ user, code, purpose = "reset" }) {
 }
 
 /** استهلاك التذكرة عند تعيين كلمة المرور (مرة واحدة فقط) */
-export async function redeemTicket(userId, ticket) {
+export async function redeemTicket(userId, ticket, run = q) {
   const value = String(ticket ?? "").trim();
   if (value.length < 20) throw badRequest("انتهت صلاحية التحقّق — أعد المحاولة من البداية.", "bad_ticket");
-  const res = await q(
+  const res = await run(
     `UPDATE otp_codes SET used_at = now(), status = 'used'
       WHERE user_id = $1 AND ticket_hash = $2 AND verified_at IS NOT NULL AND used_at IS NULL
         AND ticket_expires_at > now()

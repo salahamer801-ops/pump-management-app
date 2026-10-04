@@ -2882,6 +2882,20 @@ export function AppProvider({
   useEffect(() => {
     const pumpId = serverPumpIdRef.current;
     if (!pumpId) return;
+    const retryOnReconnect = () => {
+      const currentPumpId = serverPumpIdRef.current;
+      if (!currentPumpId || !migratedRef.current || !navigator.onLine) return;
+      setSyncState("connecting");
+      void pushOperating(currentPumpId, stateRef.current, { version: versionRef.current }).then((meta) => {
+        if (meta) {
+          versionRef.current = meta.version;
+          setSyncState("synced");
+        } else {
+          setSyncState("offline");
+        }
+      });
+    };
+    window.addEventListener("online", retryOnReconnect);
     if (!migratedRef.current) {
       /* لم يكتمل الربط بعد: يُعاد قبل أي رفع حتى لا تُستبدل بيانات الخادم ببيانات جهاز قديمة */
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
@@ -2890,6 +2904,7 @@ export function AppProvider({
       }, 1500);
       return () => {
         if (pushTimer.current) window.clearTimeout(pushTimer.current);
+        window.removeEventListener("online", retryOnReconnect);
       };
     }
     if (skipPushRef.current) {
@@ -2910,6 +2925,7 @@ export function AppProvider({
     }, 2500);
     return () => {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
+      window.removeEventListener("online", retryOnReconnect);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, reconcile]);
@@ -3009,7 +3025,15 @@ export function AppProvider({
       setTheme: (theme) => dispatch({ type: "SET_THEME", theme }),
       setAppearance: (patch) => dispatch({ type: "SET_APPEARANCE", patch }),
       markSynced: () => dispatch({ type: "MARK_SYNCED" }),
-      reset: () => dispatch({ type: "RESET" }),
+      reset: () => {
+        /* Reset محلي فقط: لا نرسل لقطة فارغة إلى الخادم ولا نحذف بيانات المضخة الرسمية. */
+        skipPushRef.current = true;
+        migratedRef.current = false;
+        serverPumpIdRef.current = null;
+        versionRef.current = 0;
+        setSyncState("local");
+        dispatch({ type: "RESET" });
+      },
       seedDemo: () => dispatch({ type: "SEED_DEMO" }),
       importState: (state) => dispatch({ type: "IMPORT", state }),
     }),

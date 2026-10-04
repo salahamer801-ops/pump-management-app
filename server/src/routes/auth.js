@@ -23,7 +23,6 @@ import {
   passwordProblem,
   publicUser,
   rateLimit,
-  revokeAllSessions,
   revokeSession,
   sha256,
   verifyPassword,
@@ -307,8 +306,8 @@ authRouter.post(
         hashPassword(String(newPassword)),
         req.user.id,
       ]);
+      await tx(`UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [req.user.id]);
     });
-    await revokeAllSessions(req.user.id);
     await logAudit(req, {
       action: "password.change",
       entityType: "user",
@@ -322,7 +321,7 @@ authRouter.post(
 /**
  * رموز التحقّق (مجانية بالكامل):
  *  - الحساب المربوط بتيليجرام: يصل الرمز إلى محادثة تيليجرام ولا يُعاد في الردّ إطلاقًا.
- *  - غير المربوط: يُطلب الاسم كما هو مسجَّل ثم يظهر الرمز على الشاشة (الوضع البديل).
+ *  - غير المربوط: لا يُصدر رمزًا؛ يجب ربط تيليجرام أو استخدام قناة موثوقة.
  * الرمز يُخزَّن مُشفَّرًا (SHA-256)، صلاحيته 5 دقائق، 5 محاولات، ويُستهلك مرة واحدة.
  */
 async function handleOtpRequest(req, res) {
@@ -360,19 +359,17 @@ async function handleOtpRequest(req, res) {
   }
 
   if (!viaTelegram) {
-    /* الوضع البديل فقط: الاسم كما هو مسجَّل قبل ظهور الرمز على الشاشة */
-    const sameName =
-      userRow.name.trim().replace(/\s+/g, " ") === String(name ?? "").trim().replace(/\s+/g, " ");
-    if (!sameName) {
-      await logAudit(req, {
-        action: "password.reset_request_failed",
-        entityType: "user",
-        entityId: userRow.id,
-        actorRole: "system",
-        metadata: { phone: maskPhone(cleanPhone) },
-      });
-      throw notFound("الاسم لا يطابق صاحب هذا الرقم.", "no_match");
-    }
+    await logAudit(req, {
+      action: "password.reset_blocked_no_verified_channel",
+      entityType: "user",
+      entityId: userRow.id,
+      actorRole: "system",
+      metadata: { phone: maskPhone(cleanPhone) },
+    });
+    throw forbidden(
+      "لا يمكن استعادة كلمة المرور بأمان من هذه الشاشة. اربط تيليجرام وتحقق من رقمك أولًا، أو تواصل مع مسؤول النظام.",
+      "verified_channel_required"
+    );
   }
 
   const issued = await issueOtp({
@@ -409,7 +406,8 @@ async function handleOtpRequest(req, res) {
     channel: issued.channel,
     expiresInMinutes: issued.expiresInMinutes,
     warning: issued.warning ?? "",
-    code: issued.code ?? null,
+    /* لا يُعاد أي رمز سري إلى عميل غير موثّق. */
+    code: null,
     hint:
       issued.channel === "telegram"
         ? "أرسلنا الرمز إلى محادثتك في تيليجرام."
@@ -477,33 +475,34 @@ authRouter.post(
     const userRow = found.rows[0];
     if (!userRow) throw notFound("لا يوجد حساب مطابق لهذا الرقم.", "no_match");
 
-    if (ticket) {
-      /* المسار المعتمد: تذكرة صادرة بعد تحقّق ناجح — تُستهلك مرة واحدة فقط */
-      await redeemTicket(userRow.id, ticket);
-    } else {
-      /* توافق مع الواجهة القديمة: رمز مباشر من الشاشة أو من الجدول القديم */
-      if (!/^\d{6}$/.test(String(code ?? "").trim())) throw badRequest("رمز الاستعادة غير صحيح.");
-      const legacy = await q(
-        `SELECT * FROM password_resets
-          WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() AND attempts < 5
-          ORDER BY created_at DESC LIMIT 1`,
-        [userRow.id]
-      );
-      const row = legacy.rows[0];
-      if (row && row.code_hash === sha256(String(code).trim())) {
-        await q(`UPDATE password_resets SET used_at = now() WHERE id = $1`, [row.id]);
+    await withTransaction(async (tx) => {
+      if (ticket) {
+        /* المسار المعتمد: استهلاك التذكرة داخل نفس المعاملة مع تغيير كلمة المرور. */
+        await redeemTicket(userRow.id, ticket, tx);
       } else {
-        if (row) await q(`UPDATE password_resets SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
-        const verified = await verifyOtp({ user: userRow, code, purpose: "reset" });
-        await redeemTicket(userRow.id, verified.ticket);
+        /* توافق مع الواجهة القديمة: رمز مباشر من الشاشة أو من الجدول القديم */
+        if (!/^\d{6}$/.test(String(code ?? "").trim())) throw badRequest("رمز الاستعادة غير صحيح.");
+        const legacy = await tx(
+          `SELECT * FROM password_resets
+            WHERE user_id = $1 AND used_at IS NULL AND expires_at > now() AND attempts < 5
+            ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+          [userRow.id]
+        );
+        const row = legacy.rows[0];
+        if (row && row.code_hash === sha256(String(code).trim())) {
+          await tx(`UPDATE password_resets SET used_at = now() WHERE id = $1`, [row.id]);
+        } else {
+          if (row) await tx(`UPDATE password_resets SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
+          const verified = await verifyOtp({ user: userRow, code, purpose: "reset", run: tx });
+          await redeemTicket(userRow.id, verified.ticket, tx);
+        }
       }
-    }
-
-    await q(`UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`, [
-      hashPassword(String(newPassword)),
-      userRow.id,
-    ]);
-    await revokeAllSessions(userRow.id);
+      await tx(`UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2`, [
+        hashPassword(String(newPassword)),
+        userRow.id,
+      ]);
+      await tx(`UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, [userRow.id]);
+    });
     await logAudit(req, {
       actorId: userRow.id,
       actorName: userRow.name,

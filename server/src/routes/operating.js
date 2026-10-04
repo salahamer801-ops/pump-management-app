@@ -308,6 +308,10 @@ async function upsertCollection(tx, key, pumpId, rows, actorId, completeSnapshot
   const ids = [];
   for (const raw of list) {
     if (!raw || !validEntityId(raw.id)) continue;
+    const existing = await tx(`SELECT pump_id FROM ${spec.table} WHERE id = $1 FOR UPDATE`, [raw.id]);
+    if (existing.rowCount > 0 && String(existing.rows[0].pump_id) !== String(pumpId)) {
+      throw forbidden("السجل لا ينتمي إلى هذه المضخة.", "pump_scope_violation");
+    }
     const cols = ["id", "pump_id"];
     const vals = [raw.id, pumpId];
     for (const [prop, fn] of Object.entries(spec.cols)) {
@@ -406,12 +410,19 @@ function assertRosterUnlock(dialsIncoming, lockedDials, incomingRoster, existing
   const unlocks = [];
   for (const dialaId of lockedDials) {
     const incoming = dialsIncoming.find((d) => asText(d.id) === dialaId);
-    if (!incoming) continue;
     const rowsIn = incomingRoster
       .filter((r) => asText(r.dialaId) === dialaId && validEntityId(r.id))
       .map((r) => `${r.id}:${asNum(r.shareMin)}:${asNum(r.order)}:${asBool(r.archived) ? 1 : 0}`)
       .sort();
-    if (rowsIn.join("|") === existingRoster.get(dialaId)) continue; /* لا تغيير في الكشف */
+    const current = existingRoster.get(dialaId) ?? "";
+    if (rowsIn.join("|") === current) continue; /* لا تغيير في الكشف */
+    /* غياب الديالة من طلب يحتوي على كشفها لا يلغي شرط القفل. */
+    if (!incoming) {
+      throw conflict(
+        "لا يمكن تعديل كشف مثبت ضمن مزامنة جزئية — أرسل حالة الديالة أو فك التثبيت بسبب موثق.",
+        "roster_locked"
+      );
+    }
     const stillLocked = incoming.rosterLocked !== false;
     const reason = asText(incoming.rosterUnlockReason, 300);
     if (stillLocked || reason.length < 3) {
@@ -911,7 +922,7 @@ operatingRouter.post(
   wrap(async (req, res) => {
     const { pump } = await requireOperatingRead(req.params.pumpId, req.user);
     const endpoint = req.body?.endpoint ? String(req.body.endpoint).slice(0, 600) : "";
-    await removeSubscription(req.user.id, endpoint);
+    await removeSubscription(req.user.id, pump.id, endpoint);
     res.json({ subscribed: false });
   })
 );
@@ -1265,6 +1276,13 @@ operatingRouter.post(
     );
     await withTransaction(async (tx) => {
       await upsertCollection(tx, "entries", day.pump_id, rows.map((r) => ({ ...r, dayId: day.id })), req.user.id);
+      const ids = rows.map((r) => r.id);
+      await tx(
+        `UPDATE day_entries
+            SET deleted_at = now(), deleted_by = $3, deletion_reason = 'schedule-replaced', updated_at = now()
+          WHERE pump_id = $1 AND day_id = $2 AND deleted_at IS NULL AND NOT (id = ANY($4::text[]))`,
+        [day.pump_id, day.id, req.user.id, ids]
+      );
     });
     await logAudit(req, {
       action: "actual_day.change",

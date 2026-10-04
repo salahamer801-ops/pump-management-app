@@ -141,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           managedPumps: res.managedPumps ?? [],
           memberships: res.memberships ?? [],
           pendingRequests: res.pendingRequests ?? 0,
+          announcement: res.announcement,
         });
       },
       changePassword: async (input) => {

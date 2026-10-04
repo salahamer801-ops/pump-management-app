@@ -71,13 +71,13 @@ export async function saveSubscription(pumpId, userId, subscription) {
   return true;
 }
 
-export async function removeSubscription(userId, endpoint) {
+export async function removeSubscription(userId, pumpId, endpoint) {
   if (endpoint) {
-    await q(`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`, [userId, endpoint]);
+    await q(`DELETE FROM push_subscriptions WHERE user_id = $1 AND pump_id = $2 AND endpoint = $3`, [userId, pumpId, endpoint]);
     return;
   }
   /* بلا نقطة نهاية: إلغاء كل اشتراكات هذا المستخدم على المضخة */
-  await q(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
+  await q(`DELETE FROM push_subscriptions WHERE user_id = $1 AND pump_id = $2`, [userId, pumpId]);
 }
 
 async function dropSubscription(endpoint) {
@@ -146,9 +146,12 @@ export async function notifyPumpMembers(pumpId, payload, exceptUserId) {
   try {
     keys = await getVapidKeys();
     list = await q(
-      `SELECT DISTINCT ON (endpoint) endpoint, p256dh, auth FROM push_subscriptions
-       WHERE pump_id = $1 AND ($2::uuid IS NULL OR user_id <> $2::uuid)
-       ORDER BY endpoint, updated_at DESC
+      `SELECT DISTINCT ON (s.endpoint) s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
+       JOIN users u ON u.id = s.user_id AND u.status = 'active'
+       LEFT JOIN pump_memberships m ON m.pump_id = s.pump_id AND m.user_id = s.user_id AND m.status = 'approved'
+       JOIN pumps p ON p.id = s.pump_id AND (p.manager_id = s.user_id OR m.id IS NOT NULL)
+       WHERE s.pump_id = $1 AND ($2::uuid IS NULL OR s.user_id <> $2::uuid)
+       ORDER BY s.endpoint, s.updated_at DESC
        LIMIT 200`,
       [pumpId, exceptUserId ?? null]
     );
