@@ -20,6 +20,9 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -35,8 +38,99 @@ body {
     linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 50%, var(--bg-bottom) 100%);
   background-attachment: fixed;
   color: #1f2937;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+/* حاويات التطبيق المشتركة: تمنع قص المحتوى في الوضع العرضي وتراعي الشريط السفلي */
+.app-shell {
+  min-height: 100dvh;
+  min-width: 0;
+  width: 100%;
+  overflow-x: clip;
+}
+
+.app-header-inner,
+.app-main,
+.app-bottom-nav > div {
+  min-width: 0;
+}
+
+.app-main {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+.app-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app-bottom-nav > div {
+  min-height: calc(4rem + env(safe-area-inset-bottom));
+}
+
+/* الهواتف الصغيرة جدًا: مساحة آمنة للغة العربية والأزرار دون overflow أفقي */
+@media (max-width: 380px) {
+  .app-main,
+  .app-header-inner {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* الوضع العرضي بارتفاع قليل: نقلل الرأس والشريط بدل قص محتوى الشاشة */
+@media (orientation: landscape) and (max-height: 560px) {
+  .app-header-inner {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .app-bottom-nav > div {
+    min-height: calc(3.25rem + env(safe-area-inset-bottom));
+  }
+
+  .app-bottom-nav button {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-size: 0.58rem;
+    line-height: 0.8rem;
+  }
+
+  .app-bottom-nav button > span {
+    height: 1.65rem;
+  }
+
+  .app-main {
+    padding-top: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
 }
 
 .dark body {

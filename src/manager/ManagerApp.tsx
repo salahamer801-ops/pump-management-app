@@ -99,10 +99,10 @@ export default function ManagerApp({
   };
 
   return (
-    <div className="mx-auto min-h-screen max-w-2xl pb-24">
+    <div className="app-shell mx-auto min-h-screen max-w-2xl pb-24">
       <VerifyBanner />
-      <header className="sticky top-0 z-30 border-b border-brand-100/70 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+      <header className="app-header sticky top-0 z-30 border-b border-brand-100/70 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
+        <div className="app-header-inner mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
             <BrandLogo size={38} />
             <div className="min-w-0">
@@ -143,7 +143,7 @@ export default function ManagerApp({
         </div>
       </header>
 
-      <main className="px-4 py-4">
+      <main className="app-main px-4 py-4">
         {tab === "home" && <Dashboard onOpenDay={openDay} onGoTab={setTab} />}
         {tab === "day" && (
           <ActualDayScreen
@@ -165,7 +165,7 @@ export default function ManagerApp({
         )}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <nav className="app-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto grid max-w-2xl grid-cols-8">
           {navItems.map((item) => (
             <button

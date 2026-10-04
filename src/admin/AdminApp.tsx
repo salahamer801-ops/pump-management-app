@@ -37,10 +37,10 @@ export default function AdminApp({ onExit }: { onExit?: () => void }) {
   const [tab, setTab] = useState<Tab>("overview");
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900" data-testid="admin-app">
+    <div className="app-shell min-h-screen bg-gray-50 dark:bg-slate-900" data-testid="admin-app">
       {/* الرأس */}
       <header className="sticky top-0 z-20 border-b border-emerald-700/20 bg-gradient-to-l from-emerald-700 via-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/10">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+        <div className="app-header-inner mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
           <BrandLogo size={40} decorativeBg />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-sm font-black leading-tight">
@@ -99,7 +99,7 @@ export default function AdminApp({ onExit }: { onExit?: () => void }) {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
+      <main className="app-main mx-auto max-w-5xl space-y-4 px-4 py-5">
         {tab === "overview" ? <OverviewScreen /> : null}
         {tab === "users" ? <UsersScreen /> : null}
         {tab === "pumps" ? <PumpsScreen /> : null}

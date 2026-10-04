@@ -122,9 +122,9 @@ function Shell({
   ];
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg pb-24">
-      <header className="sticky top-0 z-30 border-b border-emerald-100/60 bg-white/80 backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
-        <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
+    <div className="app-shell mx-auto min-h-screen max-w-lg pb-24">
+      <header className="app-header sticky top-0 z-30 border-b border-emerald-100/60 bg-white/80 backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
+        <div className="app-header-inner mx-auto flex max-w-lg items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
             <BrandLogo size={38} />
             <div>
@@ -175,7 +175,7 @@ function Shell({
       </header>
       <VerifyBanner />
 
-      <main className="px-4 py-4">
+      <main className="app-main px-4 py-4">
         {tab === "home" && <HomeScreen onGoTo={goTab} />}
         {tab === "pumps" && <PumpsScreen />}
         {tab === "cycles" && <CyclesScreen />}
@@ -185,7 +185,7 @@ function Shell({
         {tab === "settings" && <SettingsScreen onLogout={onLogout} />}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <nav className="app-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <div className="mx-auto grid max-w-lg grid-cols-7">
           {NAV.map((item) => (
             <button
