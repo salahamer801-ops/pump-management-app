@@ -301,7 +301,7 @@ const camel = (s) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const COLUMN_OVERRIDES = { order: "order_index" };
 
 /** يرفع صفوف مجموعة واحدة: upsert بالمعرّف + حذف ناعم لمن غاب */
-async function upsertCollection(tx, key, pumpId, rows, actorId) {
+async function upsertCollection(tx, key, pumpId, rows, actorId, completeSnapshot = false) {
   const spec = SPECS[key];
   if (!spec) return { key, upserted: 0, removed: 0 };
   const list = Array.isArray(rows) ? rows : [];
@@ -361,12 +361,15 @@ async function upsertCollection(tx, key, pumpId, rows, actorId) {
     ids.push(raw.id);
   }
 
-  const removed = await tx(
-    `UPDATE ${spec.table}
-        SET deleted_at = now(), deleted_by = $2, deletion_reason = 'sync-superseded', updated_at = now()
-      WHERE pump_id = $1 AND deleted_at IS NULL AND NOT (id = ANY($3::text[]))`,
-    [pumpId, actorId, ids]
-  );
+  /* الحذف الناعم لا يحدث إلا مع snapshot كامل صريح؛ payload الجزئي لا يعني حذف الباقي. */
+  const removed = completeSnapshot
+    ? await tx(
+        `UPDATE ${spec.table}
+            SET deleted_at = now(), deleted_by = $2, deletion_reason = 'sync-superseded', updated_at = now()
+          WHERE pump_id = $1 AND deleted_at IS NULL AND NOT (id = ANY($3::text[]))`,
+        [pumpId, actorId, ids]
+      )
+    : { rowCount: 0 };
   return { key, upserted: ids.length, removed: removed.rowCount ?? 0 };
 }
 
@@ -610,6 +613,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
   const body = req.body ?? {};
   const data = body.data && typeof body.data === "object" ? body.data : body;
   const clientVersion = Number.isFinite(Number(body.version)) ? Number(body.version) : null;
+  const completeSnapshot = body.snapshot === true;
 
   if (migration) {
     const existing = await q(`SELECT migrated_at FROM pump_sync WHERE pump_id = $1`, [pump.id]);
@@ -627,6 +631,18 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
   const unlocks = [];
 
   await withTransaction(async (tx) => {
+    /* لا تسمح لعميل قديم بالكتابة فوق نسخة خادم أحدث، مع قفل الصف لمنع السباق. */
+    const currentSync = await tx(
+      `SELECT version FROM pump_sync WHERE pump_id = $1 FOR UPDATE`,
+      [pump.id]
+    );
+    const currentVersion = currentSync.rowCount ? Number(currentSync.rows[0].version) : 0;
+    if (!migration && (clientVersion === null || clientVersion !== currentVersion)) {
+      throw conflict(
+        "توجد تحديثات أحدث على الخادم — أعد تحميل بيانات المضخة قبل الحفظ.",
+        "sync_conflict"
+      );
+    }
     /* إعدادات المضخة — مصدر مركزي واحد */
     if (data.settings && typeof data.settings === "object") {
       const s = data.settings;
@@ -688,7 +704,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
 
     /* الروابط المرجعية أولًا: الديالات ثم الكشف ثم الأيام ثم الصفوف */
     if (Array.isArray(data.dialas)) {
-      counts.push(await upsertCollection(tx, "dialas", pump.id, data.dialas, req.user.id));
+      counts.push(await upsertCollection(tx, "dialas", pump.id, data.dialas, req.user.id, completeSnapshot));
     }
     if (Array.isArray(data.roster)) {
       /* كل صف يُنسب لديالة هذه المضخة فقط */
@@ -705,7 +721,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
           ...assertRosterUnlock(data.dialas ?? [], locked, data.roster, fingerprint, req.user.id)
         );
       }
-      counts.push(await upsertCollection(tx, "roster", pump.id, data.roster, req.user.id));
+      counts.push(await upsertCollection(tx, "roster", pump.id, data.roster, req.user.id, completeSnapshot));
       for (const u of unlocks) {
         await tx(
           `UPDATE dialas SET roster_locked = false, roster_unlock_reason = $2, updated_at = now() WHERE id = $1`,
@@ -722,7 +738,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
         const ok = await tx(`SELECT 1 FROM dialas WHERE id = $1 AND pump_id = $2`, [dialaId, pump.id]);
         if (ok.rowCount === 0) throw badRequest("يوم مرتبط بديالة لا تنتمي لهذه المضخة.", "unknown_diala");
       }
-      counts.push(await upsertCollection(tx, "days", pump.id, data.days, req.user.id));
+      counts.push(await upsertCollection(tx, "days", pump.id, data.days, req.user.id, completeSnapshot));
     }
     if (Array.isArray(data.entries)) {
       for (const entry of data.entries) {
@@ -731,7 +747,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
         const ok = await tx(`SELECT 1 FROM diala_days WHERE id = $1 AND pump_id = $2`, [dayId, pump.id]);
         if (ok.rowCount === 0) throw badRequest("دور في يوم لا ينتمي لهذه المضخة.", "unknown_day");
       }
-      counts.push(await upsertCollection(tx, "entries", pump.id, data.entries, req.user.id));
+      counts.push(await upsertCollection(tx, "entries", pump.id, data.entries, req.user.id, completeSnapshot));
     }
 
     for (const key of [
@@ -744,7 +760,7 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
       "financeRecords",
     ]) {
       if (Array.isArray(data[key])) {
-        counts.push(await upsertCollection(tx, key, pump.id, data[key], req.user.id));
+        counts.push(await upsertCollection(tx, key, pump.id, data[key], req.user.id, completeSnapshot));
       }
     }
 

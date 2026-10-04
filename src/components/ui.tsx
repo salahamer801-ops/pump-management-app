@@ -267,22 +267,27 @@ export function Modal({
 }) {
   useEffect(() => {
     if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-50 flex min-h-0 items-end justify-center overscroll-contain sm:items-center">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl animate-fade-up dark:bg-slate-800">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="relative z-10 flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] min-h-0 w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92dvh] sm:rounded-3xl animate-fade-up dark:bg-slate-800">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 pb-3 pt-[max(1.25rem,env(safe-area-inset-top))] dark:border-slate-700">
           <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">{title}</h3>
           <button
             onClick={onClose}
@@ -292,7 +297,9 @@ export function Modal({
             <X size={20} />
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4">
+          {children}
+        </div>
       </div>
     </div>
   );

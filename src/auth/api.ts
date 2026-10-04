@@ -14,7 +14,10 @@ const TOKEN_KEY = "pump-org-token-v1";
  * "/api" نضيفه.
  * بلا هذا المتغيّر (المعاينة والنشر على الويب) لا يتغيّر أي سلوك.
  */
-const RAW_API_BASE = String(import.meta.env.VITE_API_BASE_URL ?? "").trim();
+/* import.meta.env توفرها Vite في المتصفح، لكنها غير موجودة عند تشغيل أدوات
+ * التحقق المجمّعة مباشرة بواسطة Node. القراءة الآمنة تمنع انهيار الاختبارات. */
+const viteEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {};
+const RAW_API_BASE = String(viteEnv.VITE_API_BASE_URL ?? "").trim();
 
 /** الأساس النهائي: بلا شرطة أخيرة وبلا "/api" في آخره */
 export const API_BASE = RAW_API_BASE.replace(/\/+$/, "").replace(/\/api$/i, "");

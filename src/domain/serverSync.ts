@@ -584,7 +584,7 @@ export async function pushOperating(
   try {
     const res = await api<{ meta: OperatingMeta }>(path, {
       method,
-      body: { version: options.version ?? 0, data: payloadFromState(state), source: "localStorage-v2" },
+      body: { version: options.version ?? 0, snapshot: true, data: payloadFromState(state), source: "localStorage-v2" },
     });
     return res.meta;
   } catch {
