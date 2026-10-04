@@ -307,7 +307,7 @@ export default function SettingsScreen({
       {confirmReset ? (
         <Card className="space-y-3 border-red-200 p-4">
           <p className="text-xs font-bold text-red-600">
-            سيتم مسح كل بيانات المضخة والتشغيل من هذا الجهاز. يُنصح بتنزيل نسخة احتياطية أولًا.
+            سيتم حذف كل بيانات المضخة والتشغيل من الخادم ومن هذا الجهاز. يُنصح بتنزيل نسخة احتياطية أولًا.
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" className="flex-1" onClick={() => setConfirmReset(false)}>
@@ -316,9 +316,15 @@ export default function SettingsScreen({
             <Button
               variant="danger"
               className="flex-1"
-              onClick={() => {
+              onClick={async () => {
+                const cleared = await actions.clearServerData();
+                if (!cleared) {
+                  setMessage("تعذّر حذف البيانات الرسمية من الخادم — لم يتم مسح نسخة الجهاز.");
+                  return;
+                }
                 actions.reset();
                 setConfirmReset(false);
+                setMessage("تم حذف بيانات المضخة الرسمية والمحلية بنجاح.");
               }}
             >
               تأكيد المسح

@@ -937,6 +937,35 @@ operatingRouter.post(
   wrap(async (req, res) => applySync(req, res, { source: "localStorage-v2", migration: true }))
 );
 
+/** حذف بيانات التشغيل رسميًا — للمدير فقط، مع إبقاء هوية المضخة والحساب. */
+operatingRouter.delete(
+  "/pumps/:pumpId/operating",
+  wrap(async (req, res) => {
+    const { pump } = await requireOperatingWrite(req.params.pumpId, req.user);
+    await withTransaction(async (tx) => {
+      for (const spec of Object.values(SPECS)) {
+        await tx(
+          `UPDATE ${spec.table}
+              SET deleted_at = now(), deleted_by = $2, deletion_reason = 'manager-reset', updated_at = now()
+            WHERE pump_id = $1 AND deleted_at IS NULL`,
+          [pump.id, req.user.id]
+        );
+      }
+      await tx(`DELETE FROM pump_settings WHERE pump_id = $1`, [pump.id]);
+      await tx(`DELETE FROM pump_sync WHERE pump_id = $1`, [pump.id]);
+    });
+    await logAudit(req, {
+      action: "operating.reset",
+      entityType: "pump",
+      entityId: pump.id,
+      pumpId: pump.id,
+      actorRole: "manager",
+      metadata: { note: "حذف رسمي لبيانات التشغيل بطلب المدير" },
+    });
+    res.json({ ok: true, pumpId: pump.id });
+  })
+);
+
 /* --------------------------- السجلات الشخصية للمستخدم --------------------------- */
 
 async function upsertPersonal(tx, userId, pumpId, rows) {

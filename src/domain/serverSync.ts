@@ -592,6 +592,16 @@ export async function pushOperating(
   }
 }
 
+/** حذف بيانات التشغيل الرسمية للمضخة — لا يشمل حساب المضخة أو هويتها. */
+export async function clearOperating(pumpId: string): Promise<boolean> {
+  try {
+    await api(`/api/pumps/${pumpId}/operating`, { method: "DELETE" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 /* ------------------- حالة قراءة رسمية من بيانات الخادم ------------------- */
 

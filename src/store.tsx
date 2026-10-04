@@ -72,6 +72,7 @@ import { applyAppearance, watchSystemTheme, type Appearance } from "./domain/app
 import {
   applyPayload,
   applyServerPumpIdentity,
+  clearOperating,
   hasOperatingData,
   pullOperating,
   pushOperating,
@@ -2650,6 +2651,7 @@ export interface AppActions {
   /** يعدّل المظهر والكتابة معًا: الوضع، قوة الكتابة، لون التمييز، حجم الخط */
   setAppearance: (patch: Partial<Appearance>) => void;
   markSynced: () => void;
+  clearServerData: () => Promise<boolean>;
   reset: () => void;
   seedDemo: () => void;
   importState: (state: AppState) => void;
@@ -3025,8 +3027,13 @@ export function AppProvider({
       setTheme: (theme) => dispatch({ type: "SET_THEME", theme }),
       setAppearance: (patch) => dispatch({ type: "SET_APPEARANCE", patch }),
       markSynced: () => dispatch({ type: "MARK_SYNCED" }),
+      clearServerData: async () => {
+        const pumpId = serverPumpIdRef.current;
+        if (!pumpId) return false;
+        return clearOperating(pumpId);
+      },
       reset: () => {
-        /* Reset محلي فقط: لا نرسل لقطة فارغة إلى الخادم ولا نحذف بيانات المضخة الرسمية. */
+        /* بعد نجاح الحذف الرسمي: نظف الحالة المحلية ولا ترسل لقطة فارغة مجددًا. */
         skipPushRef.current = true;
         migratedRef.current = false;
         serverPumpIdRef.current = null;
