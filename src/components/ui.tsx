@@ -280,10 +280,10 @@ export function Modal({
       event.preventDefault();
       onClose();
     };
-    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack);
+    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack, true);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack);
+      window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack, true);
       document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
