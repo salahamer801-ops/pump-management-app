@@ -8,6 +8,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { Clock, X } from "lucide-react";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
@@ -280,7 +281,7 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  const modal = (
     <div
       className="fixed inset-0 z-50 flex h-[100dvh] min-h-[100svh] min-w-0 items-end justify-center overflow-hidden overscroll-none px-0 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] sm:items-center sm:p-4"
       role="dialog"
@@ -310,6 +311,8 @@ export function Modal({
       </div>
     </div>
   );
+  /* النوافذ المتداخلة (تفاصيل الشخص ← تسجيل المساهم) تبقى مستقلة عن الأب. */
+  return typeof document === "undefined" ? null : createPortal(modal, document.body);
 }
 
 /* ----------------------------- Empty state ---------------------------- */
