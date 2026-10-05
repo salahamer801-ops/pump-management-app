@@ -28,6 +28,7 @@ import { AppearanceCard } from "../../components/AppearanceCard";
 import { SyncSettingsCard } from "../SyncPanel";
 import PushCard from "../PushCard";
 import TelegramVerifyCard from "../../components/TelegramVerify";
+import BiometricSettingsCard from "../../security/BiometricSettingsCard";
 
 export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
   const { state, actions } = useShareholder();
@@ -56,6 +57,7 @@ export default function SettingsScreen({ onLogout }: { onLogout: () => void }) {
       <InstallAppCard />
       <PushCard />
       <TelegramVerifyCard />
+      <BiometricSettingsCard t={t} />
 
       {/* الملف الشخصي */}
       <Card className="p-5">

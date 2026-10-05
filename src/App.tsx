@@ -8,6 +8,7 @@ import AdminApp from "./admin/AdminApp";
 import { BrandSplash } from "./components/Brand";
 import { UpdateNotice } from "./components/UpdateNotice";
 import { clearLegacySession } from "./session";
+import BiometricGate from "./security/BiometricGate";
 
 
 /**
@@ -23,9 +24,11 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <Root />
-      {/* إشعار النسخة الجديدة — يظهر في كل الشاشات فوق الشريط السفلي */}
-      <UpdateNotice />
+      <BiometricGate>
+        <Root />
+        {/* إشعار النسخة الجديدة — يظهر في كل الشاشات فوق الشريط السفلي */}
+        <UpdateNotice />
+      </BiometricGate>
     </AuthProvider>
   );
 }
@@ -142,4 +145,3 @@ function AnnouncementBar({ tone, text }: { tone: "info" | "warn" | "danger"; tex
     </div>
   );
 }
-

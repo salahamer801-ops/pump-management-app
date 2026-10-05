@@ -24,6 +24,7 @@ import { InstallAppCard } from "../../components/InstallApp";
 import { AppearanceCard } from "../../components/AppearanceCard";
 import TelegramVerifyCard from "../../components/TelegramVerify";
 import { BRAND_NAME, BrandLogo } from "../../components/Brand";
+import BiometricSettingsCard from "../../security/BiometricSettingsCard";
 
 const currencyLabel = (c: Currency) => (c === "YER" ? "ريال يمني" : c === "SAR" ? "ريال سعودي" : "دولار");
 
@@ -151,6 +152,7 @@ export default function SettingsScreen({
       {/* التطبيق على جوال المسؤول — أيقونة على الشاشة الرئيسية بلا متجر تطبيقات */}
       <InstallAppCard />
       <TelegramVerifyCard />
+      <BiometricSettingsCard />
       <Card className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <Droplets size={16} className="text-sky-600 dark:text-sky-300" />
