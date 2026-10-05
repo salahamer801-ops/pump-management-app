@@ -167,7 +167,6 @@ export default function ManagerApp({
           <ActualDayScreen
             dayId={selectedDayId}
             onChangeDay={setSelectedDayId}
-            onOpenDiala={() => setTab("diala")}
           />
         )}
         {tab === "people" && <PeopleScreen />}

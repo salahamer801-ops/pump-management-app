@@ -67,7 +67,6 @@ import {
   roundDates,
   roundForDate,
   roundOfDay,
-  isBaseRosterPerson,
   royaltyCashPartOf,
   royaltyDeferredPartOf,
   shortfallReasonLabel,
@@ -112,7 +111,6 @@ import {
   cx,
 } from "../../components/ui";
 import PersonPicker, { roleLabel } from "../../components/PersonPicker";
-import DayBaseShiftCard from "../components/DayBaseShiftCard";
 import ParticipantModal from "../components/ParticipantModal";
 import SettlementEditor, {
   settlementAmounts,
@@ -133,12 +131,9 @@ const STATUS_FLOW: { id: DayStatus; label: string }[] = [
 export default function ActualDayScreen({
   dayId,
   onChangeDay,
-  onOpenDiala,
 }: {
   dayId: string | null;
   onChangeDay: (id: string | null) => void;
-  /** الانتقال إلى شاشة الديالات — إدارة كشف مساهمي الديالة هناك فقط */
-  onOpenDiala?: () => void;
 }) {
   const { state, actions } = useApp();
   const pump = state.pump!;
@@ -469,9 +464,6 @@ export default function ActualDayScreen({
         </Card>
       ) : null}
 
-      {/* 1) مساهمو ديالة هذا اليوم — عرض مرجعي فقط، والإدارة في شاشة الديالات */}
-      <DayBaseShiftCard day={day} onManageList={onOpenDiala} />
-
       {issues.length > 0 ? (
         <Card className="space-y-2 p-4">
           <div className="flex items-center gap-2">
@@ -509,14 +501,14 @@ export default function ActualDayScreen({
         </Card>
       ) : null}
 
-      {/* 2) الدوام الفعلي: إدخال المشاركين خطوة بخطوة بترتيب زمني إلزامي */}
+      {/* قائمة المساهمين الأساسية لهذا اليوم فقط — مستقلة عن بقية أيام الديالة */}
       <Card className="p-4" data-testid="day-shift-section">
         <div className="mb-3 flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300">
             <Users size={16} />
           </span>
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
-            الدوام الفعلي — من أخذ ماءه في هذا اليوم
+            مساهمو اليوم الأساسيون — قائمة مستقلة قابلة للتعديل
           </h2>
           <span className="mr-auto text-[11px] text-gray-400">{entries.length} مشارك</span>
         </div>
@@ -527,7 +519,7 @@ export default function ActualDayScreen({
 
         {entries.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
-            لا يوجد مشارك في دوام هذا اليوم بعد — أضف المشارك الأول من نافذة «إضافة مشارك في دوام اليوم».
+            لا يوجد مساهمون أساسيون في هذا اليوم بعد — أضف أول مساهم من زر «إضافة مساهم لهذا اليوم».
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -536,7 +528,7 @@ export default function ActualDayScreen({
                 key={entry.id}
                 index={index}
                 entry={entry}
-                fromBaseRoster={isBaseRosterPerson(state, day.roundId ?? null, entry.personId)}
+                fromBaseRoster={false}
                 onEdit={() => setEditEntry(entry)}
                 onUsage={() => setUsageEntry(entry)}
                 onEditPerson={() => {
@@ -587,12 +579,12 @@ export default function ActualDayScreen({
 
         <div className="mt-3">
           <Button className="w-full" onClick={() => setPickerOpen(true)} data-testid="day-add-participant">
-            <Plus size={18} /> إضافة مشارك في دوام اليوم
+            <Plus size={18} /> إضافة مساهم لهذا اليوم
           </Button>
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-          يُدخل المشارك بخطوة واحدة: الاسم ثم الوقت من … إلى … بالترتيب الزمني، مع الديزل والرواسة وسبب النقص عند وجوده.
-          الترتيب إلزامي: لا تداخل ولا خروج عن نافذة تشغيل اليوم. وهذا لا يغيّر كشف الديالة ولا أي يوم آخر.
+          هذه القائمة تخص هذا اليوم فقط: قد تضم 16 مساهمًا في يوم، و16 مساهمًا مختلفين في اليوم التالي، و8 في يوم آخر.
+          أضف أو عدّل أو أزل المساهمين هنا؛ لا تنتقل التغييرات إلى أي يوم آخر.
         </p>
       </Card>
 

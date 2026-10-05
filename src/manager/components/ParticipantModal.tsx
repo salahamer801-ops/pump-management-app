@@ -1,18 +1,16 @@
 /**
  * «إضافة مشارك في دوام اليوم» — خطوة واحدة لكل شخص.
  *
- * المشارك يُدخل هنا مرة واحدة: الاسم (وفق كشف ديالة اليوم أولًا، ثم بقية
- * الأشخاص)، ثم من → إلى بالترتيب الزمني، مع الديزل والرواسة وسبب النقص.
+ * المساهم يُدخل هنا في قائمة اليوم الحالية فقط، ثم من → إلى بالترتيب الزمني.
  * الترتيب الزمني إلزامي: تُمنع المدة الصفرية والخروج عن نافذة تشغيل اليوم
  * والتداخل وتكرار نفس الشخص في فترة متقاطعة — ويُقترح وقت بديل.
- * الكشف مرجع لا يحجز ساعات: كل ما يُسجَّل هنا هو دوام هذا اليوم وحده.
+ * لا توجد قائمة مساهمين مشتركة للديالة: كل ما يُسجَّل هنا يخص هذا اليوم وحده.
  */
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, HandCoins, ShieldCheck, UserPlus } from "lucide-react";
 import { useApp } from "../../store";
 import {
   SHORTFALL_REASON_OPTIONS,
-  baseRosterTimeline,
   computeUsageDraft,
   dayTimeline,
   findPerson,
@@ -65,17 +63,6 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
   const { state, actions } = useApp();
   const pump = state.pump!;
 
-  /** أسطر كشف ديالة هذا اليوم — للاقتراح ولمعرفة النصيب الأساسي */
-  const roster = useMemo(
-    () => baseRosterTimeline(state, pump, day.roundId ?? null),
-    [state, pump, day.roundId]
-  );
-  const priorityIds = useMemo(() => roster.map((r) => r.personId), [roster]);
-  const rosterByPerson = useMemo(
-    () => new Map(roster.map((r) => [r.personId, r])),
-    [roster]
-  );
-
   const [personId, setPersonId] = useState<string>("");
   const [role, setRole] = useState<EntryRole>("shareholder");
   const [startTime, setStartTime] = useState(() => nextAvailableStart(state, day, pump));
@@ -121,7 +108,6 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
   const suggestedStart = (windowConflict ?? overlapConflict)?.suggestedStart;
 
   const person = personId ? findPerson(state, personId) : null;
-  const rosterRow = personId ? rosterByPerson.get(personId) ?? null : null;
   const shareholder = personId ? shareholderOfPerson(state, pump.id, personId) : null;
   const shareUse = personId ? shareUseNote(state, pump.id, personId, day.date) : null;
   const shortfall = baseMin > 0 && minutes > 0 && minutes < baseMin;
@@ -159,13 +145,12 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
 
   const pickPerson = (id: string) => {
     setPersonId(id);
-    const row = rosterByPerson.get(id);
     const sh = shareholderOfPerson(state, pump.id, id);
-    const share = row?.shareMin || sh?.baseHoursMin || 60;
-    setBaseMin(share);
-    setRole(row?.role ?? (sh ? "shareholder" : "guest"));
-    setUsageType(row || sh ? "share" : "guest");
-    /* اختيار اسم من الكشف يملأ ساعات دوامه تلقائيًا — والمسؤول يعدّلها بحرية */
+    const share = 60;
+    setBaseMin(0);
+    setRole("shareholder");
+    setUsageType(sh ? "share" : "guest");
+    /* مدة اليوم يحددها المسؤول لكل مساهم؛ لا نرث ساعاتًا من ديالة أو يوم آخر. */
     setEndTime(minutesToTime(timeToMinutes(startTime) + share));
     setPicking(false);
   };
@@ -268,7 +253,7 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
           </p>
         ) : null}
 
-        {/* الاسم: كشف الديالة أولًا ثم بقية الأشخاص */}
+        {/* اختيار مساهم لهذا اليوم فقط */}
         <Field label="المشارك">
           <button
             onClick={() => setPicking(true)}
@@ -283,7 +268,6 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
                     {person.phone}
                   </span>
                 ) : null}
-                {rosterRow ? <Pill tone="blue">كشف الديالة · {formatDuration(rosterRow.shareMin)}</Pill> : null}
                 {shareUse ? (
                   <span className="rounded-lg bg-white px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-slate-800 dark:text-amber-300">
                     {shareUse.label}
@@ -292,7 +276,7 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2 text-gray-400">
-                <UserPlus size={16} /> اختر المشارك — كشف الديالة أولًا
+                <UserPlus size={16} /> اختر مساهمًا لهذا اليوم
               </span>
             )}
           </button>
@@ -330,7 +314,6 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
           </Field>
           <div className="rounded-2xl bg-sky-50 px-3 py-2 text-[11px] font-bold text-sky-800 dark:bg-sky-900/25 dark:text-sky-200">
             <div>المدة: {formatDuration(minutes)}</div>
-            {rosterRow ? <div className="mt-1 text-sky-700/80 dark:text-sky-300/80">نصيبه في الكشف: {formatDuration(rosterRow.shareMin)}</div> : null}
           </div>
         </div>
 
@@ -501,8 +484,7 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
           </Button>
         </div>
         <p className="text-[10px] leading-relaxed text-gray-400">
-          الحفظ يُنشئ صف المشارك في اليوم مع تسجيل استخدامه وتسديده في خطوة واحدة. الكشف لا يُعدَّل من هنا، ولا
-          تُحجز ساعاته تلقائيًا.
+          الحفظ يضيف هذا المساهم إلى قائمة اليوم الحالية فقط مع تسجيل استخدامه وتسديده. يمكن تعديل الصف أو إزالته لاحقًا، ولا يتأثر أي يوم آخر.
         </p>
       </div>
 
@@ -511,15 +493,11 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
           open
           onClose={() => setPicking(false)}
           pumpId={pump.id}
-          title="اختيار المشارك — كشف الديالة أولًا"
-          priorityIds={priorityIds}
+          title="اختيار مساهم لهذا اليوم"
+          priorityIds={[]}
           hintFor={(p) => {
-            const row = rosterByPerson.get(p.id);
-            if (!row) return null;
             const use = shareUseNote(state, pump.id, p.id, day.date);
-            return `نصيبه ${formatDuration(row.shareMin)}${p.phone ? ` · ${p.phone}` : ""}${
-              use ? ` · ${use.label}` : ""
-            }`;
+            return `${p.phone ? p.phone : ""}${use ? ` · ${use.label}` : ""}` || null;
           }}
           onSelect={(p) => pickPerson(p.id)}
         />
@@ -529,4 +507,3 @@ export default function ParticipantModal({ day, actor, correctionReason = "", on
 }
 
 /* ----------------------------- أدوات محلية ----------------------------- */
-
