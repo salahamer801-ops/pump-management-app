@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -31,6 +31,7 @@ import TurnsScreen from "./screens/TurnsScreen";
 import AccountsScreen from "./screens/AccountsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import OfficialScreen from "./screens/OfficialScreen";
+import { NATIVE_BACK_EVENT } from "../security/nativeBack";
 
 type Tab = "home" | "pumps" | "cycles" | "turns" | "official" | "accounts" | "settings";
 
@@ -45,6 +46,7 @@ function Shell({
   const { session } = useAuth();
   const sync = useOfficialSync();
   const [tab, setTab] = useState<Tab>("home");
+  const tabHistory = useRef<Tab[]>(["home"]);
   const [notifOpen, setNotifOpen] = useState(false);
   /** المضخة المرتبطة المعتمدة من الخادم (اسم المضخة وكودها والتنبيهات) */
   const approved = (session?.memberships ?? []).filter((m) => m.status === "approved");
@@ -69,6 +71,22 @@ function Shell({
     setOfficial(readManagerState(linkedPumpId));
     setReadIds(linkedPumpId ? readOfficialMeta(linkedPumpId).readNotificationIds : []);
   }, [linkedPumpId, sync.tick]);
+
+  useEffect(() => {
+    const last = tabHistory.current[tabHistory.current.length - 1];
+    if (last !== tab) tabHistory.current.push(tab);
+  }, [tab]);
+
+  useEffect(() => {
+    const onNativeBack = (event: Event) => {
+      if (event.defaultPrevented || tabHistory.current.length <= 1) return;
+      event.preventDefault();
+      tabHistory.current.pop();
+      setTab(tabHistory.current[tabHistory.current.length - 1]);
+    };
+    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack);
+    return () => window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack);
+  }, []);
 
   /* السحب للأسفل للتحديث على الجوال */
   usePullToRefresh(() => void sync.refresh(false));

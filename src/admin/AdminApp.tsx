@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   Download,
@@ -19,6 +19,7 @@ import PumpsScreen from "./screens/PumpsScreen";
 import MembershipsScreen from "./screens/MembershipsScreen";
 import AuditScreen from "./screens/AuditScreen";
 import AdminSettingsScreen from "./screens/AdminSettingsScreen";
+import { NATIVE_BACK_EVENT } from "../security/nativeBack";
 
 type Tab = "overview" | "users" | "pumps" | "memberships" | "audit" | "settings";
 
@@ -35,6 +36,23 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 export default function AdminApp({ onExit }: { onExit?: () => void }) {
   const { session, logout } = useAuth();
   const [tab, setTab] = useState<Tab>("overview");
+  const tabHistory = useRef<Tab[]>(["overview"]);
+
+  useEffect(() => {
+    const last = tabHistory.current[tabHistory.current.length - 1];
+    if (last !== tab) tabHistory.current.push(tab);
+  }, [tab]);
+
+  useEffect(() => {
+    const onNativeBack = (event: Event) => {
+      if (event.defaultPrevented || tabHistory.current.length <= 1) return;
+      event.preventDefault();
+      tabHistory.current.pop();
+      setTab(tabHistory.current[tabHistory.current.length - 1]);
+    };
+    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack);
+    return () => window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack);
+  }, []);
 
   return (
     <div className="app-shell min-h-screen bg-gray-50 dark:bg-slate-900" data-testid="admin-app">

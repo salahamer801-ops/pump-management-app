@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -31,6 +31,7 @@ import FinanceScreen from "./screens/FinanceScreen";
 import ReportsScreen from "./screens/ReportsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import PumpAccountsScreen from "./screens/PumpAccountsScreen";
+import { NATIVE_BACK_EVENT } from "../security/nativeBack";
 
 export type ManagerTab =
   | "home"
@@ -64,6 +65,7 @@ export default function ManagerApp({
   const { user, logout } = useAuth();
   const userName = user?.name ?? "المسؤول";
   const [tab, setTab] = useState<ManagerTab>("home");
+  const tabHistory = useRef<ManagerTab[]>(["home"]);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(managedPump.pendingCount ?? 0);
@@ -80,6 +82,22 @@ export default function ManagerApp({
   useEffect(() => {
     refreshPending();
   }, [refreshPending]);
+
+  useEffect(() => {
+    const last = tabHistory.current[tabHistory.current.length - 1];
+    if (last !== tab) tabHistory.current.push(tab);
+  }, [tab]);
+
+  useEffect(() => {
+    const onNativeBack = (event: Event) => {
+      if (event.defaultPrevented || tabHistory.current.length <= 1) return;
+      event.preventDefault();
+      tabHistory.current.pop();
+      setTab(tabHistory.current[tabHistory.current.length - 1]);
+    };
+    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack);
+    return () => window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack);
+  }, []);
 
   const navItems = NAV;
 

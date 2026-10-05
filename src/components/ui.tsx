@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Clock, X } from "lucide-react";
+import { NATIVE_BACK_EVENT } from "../security/nativeBack";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -274,8 +275,15 @@ export function Modal({
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
+    const onNativeBack = (event: Event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener(NATIVE_BACK_EVENT, onNativeBack);
     return () => {
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener(NATIVE_BACK_EVENT, onNativeBack);
       document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
