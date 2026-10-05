@@ -886,31 +886,10 @@ function reducer(state: AppState, action: Action): AppState {
         /* لا يُملأ اليوم تلقائيًا: أساسيّوه يُضافون يدويًا لكل يوم على حدة */
       }
       const round: DialaRound = { ...action.round };
-      /* وراثة كشف الدوام الأساسي: نفس الأشخاص ونفس الترتيب ونفس النصيب من آخر ديالة
-         غير مؤرشفة — ثم يُثبَّت ويُعدَّل عند الحاجة، فلا يُعاد إدخال 50 اسمًا كل دورة */
-      const previous = state.rounds
-        .filter((r) => !r.archived && r.id !== round.id)
-        .sort((a, b) => b.number - a.number)[0];
-      const inherited: BaseRosterMember[] = previous
-        ? baseRosterRows(state, previous.id).map((row, i) => ({
-            id: uid("rst"),
-            pumpId: round.pumpId,
-            roundId: round.id,
-            personId: row.personId,
-            shareMin: row.shareMin,
-            order: i,
-            role: row.role,
-            notes: `موروث من كشف ديالة ${previous.number}`,
-            archived: false,
-            createdAt: new Date().toISOString(),
-            createdBy: "system",
-          }))
-        : [];
       const next = {
         ...state,
         rounds: [...state.rounds, round],
         days: [...state.days, ...newDays],
-        roster: [...state.roster, ...inherited],
         counters: {
           diala: Math.max(number, state.counters.diala),
           round: Math.max(state.counters.round, round.number + 1),
@@ -920,7 +899,7 @@ function reducer(state: AppState, action: Action): AppState {
         action: "create",
         entity: "round",
         entityId: round.id,
-        summary: `إنشاء ديالة ${round.number}: من ${round.startDate} إلى ${round.endDate} (${round.days} يوم، أُنشئ ${newDays.length} يوم${inherited.length > 0 ? `، ووُرِّث كشف الديالة السابقة (${inherited.length} شخص)` : ""})`,
+        summary: `إنشاء ديالة ${round.number}: من ${round.startDate} إلى ${round.endDate} (${round.days} يوم مستقل)`,
         after: round,
         op: "create",
         notify: [
@@ -2655,6 +2634,8 @@ export interface AppActions {
   /** يعدّل المظهر والكتابة معًا: الوضع، قوة الكتابة، لون التمييز، حجم الخط */
   setAppearance: (patch: Partial<Appearance>) => void;
   markSynced: () => void;
+  /** نشر الحالة المحلية إلى الخادم بطلب صريح من المستخدم فقط */
+  publishNow: () => Promise<boolean>;
   clearServerData: () => Promise<boolean>;
   reset: () => void;
   seedDemo: () => void;
@@ -2662,7 +2643,7 @@ export interface AppActions {
 }
 
 /** حالة حفظ البيانات الرسمية على الخادم (المرحلة الثانية) */
-export type CloudSyncState = "local" | "connecting" | "synced" | "offline";
+export type CloudSyncState = "local" | "connecting" | "publishing" | "dirty" | "synced" | "offline";
 
 interface AppContextValue {
   state: AppState;
@@ -2768,12 +2749,7 @@ export function AppProvider({
   /** المضخة الرسمية على الخادم (من قائمة مضخات الحساب) — الربط بها لا برقم محلي */
   const serverPumpId = serverPump?.id ?? null;
 
-  /**
-   * مطابقة بيانات الجهاز مع بيانات الخادم الرسمية — الخادم هو المصدر:
-   *  - بيانات على الخادم → تُنزَّل إلى هذا الجهاز (بنسخة احتياطية محلية قبل الاستبدال).
-   *  - بيانات محلية فقط → تُرفع إلى الخادم مرة واحدة (ترحيل آمن، بلا حذف أي شيء محلي).
-   *  - لا بيانات في الطرفين → الربط جاهز، وكل تعديل قادم يُرفع.
-   */
+  /** فتح التطبيق يقرأ المحلي أولًا. تنزيل الخادم مسموح فقط على جهاز لا يملك بيانات محلية. */
   const reconcile = useCallback(
     async (pumpId: string): Promise<boolean> => {
       const remote = await pullOperating(pumpId);
@@ -2790,19 +2766,7 @@ export function AppProvider({
       /* سجل مضخة أُنشئ على هذا الجهاز (معرّفه محلي لا معرّف الخادم) = إعدادات يملكها الجهاز */
       const ownLocalPump = Boolean(local.pump && local.pump.id !== remote.pump.id);
 
-      const backup = (reason: string) => {
-        if (!hasOperatingData(local)) return;
-        try {
-          localStorage.setItem(
-            `pump-org-backup-${reason}::${storageKey}`,
-            JSON.stringify({ at: new Date().toISOString(), reason, state: local })
-          );
-        } catch {
-          /* لا نُفشل المزامنة إن امتلأ التخزين */
-        }
-      };
-
-      if (serverWasCleared) {
+      if (serverWasCleared && !localHasData) {
         /* علامة حذف رسمية: لا نرحّل أي cache قديم إلى الخادم بعد إعادة الفتح. */
         const clean = applyServerPumpIdentity(emptyState(), remote);
         skipPushRef.current = true;
@@ -2813,36 +2777,15 @@ export function AppProvider({
         return true;
       }
 
-      if (!serverHasData && (localHasData || ownLocalPump)) {
-        /* ترحيل آمن: نسخة احتياطية محلية أولًا، ثم الرفع، ثم علامة ترحيل — بلا حذف أي شيء */
-        backup("phase2");
-        const withIdentity = applyServerPumpIdentity(local, remote);
-        const meta = await pushOperating(pumpId, withIdentity, {
-          migration: true,
-          version: remote.meta.version,
-        });
-        if (!meta?.migratedAt) {
-          setSyncState("offline");
-          return false;
-        }
-        try {
-          localStorage.setItem(`pump-org-migrated::${pumpId}`, meta.migratedAt);
-        } catch {
-          /* ignore */
-        }
-        versionRef.current = meta.version;
-        if (withIdentity !== local) {
-          skipPushRef.current = true;
-          dispatch({ type: "IMPORT", state: { ...withIdentity, version: 3 } });
-        }
+      if (localHasData || ownLocalPump) {
+        /* المحلي هو المصدر عند وجوده: لا تنزيل ولا رفع تلقائي عند الفتح. */
         migratedRef.current = true;
-        setSyncState("synced");
+        setSyncState(stateRef.current.syncQueue.some((s) => s.status === "pending") ? "dirty" : "local");
         return true;
       }
 
       if (serverHasData || remote.meta.migratedAt) {
-        /* الخادم رسمي: ننسخ الحالة الرسمية إلى هذا الجهاز (بنسخة احتياطية قبل الاستبدال) */
-        backup("preimport");
+        /* جهاز جديد بلا بيانات: يمكنه أخذ آخر نسخة منشورة من الخادم. */
         const merged = applyPayload(applyServerPumpIdentity(local, remote), remote);
         skipPushRef.current = true;
         dispatch({ type: "IMPORT", state: { ...merged, version: 3 } });
@@ -2896,24 +2839,11 @@ export function AppProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverPumpId, state.pump?.pumpCode, reconcile]);
 
-  /* رفع التعديلات إلى الخادم بعد كل تغيير رسمي (بتأخير قصير) */
+  /* لا رفع تلقائي: كل تعديل يبقى محليًا ويظهر كتغيير غير منشور. */
   useEffect(() => {
     const pumpId = serverPumpIdRef.current;
     if (!pumpId) return;
-    const retryOnReconnect = () => {
-      const currentPumpId = serverPumpIdRef.current;
-      if (!currentPumpId || !migratedRef.current || !navigator.onLine) return;
-      setSyncState("connecting");
-      void pushOperating(currentPumpId, stateRef.current, { version: versionRef.current }).then((meta) => {
-        if (meta) {
-          versionRef.current = meta.version;
-          setSyncState("synced");
-        } else {
-          setSyncState("offline");
-        }
-      });
-    };
-    window.addEventListener("online", retryOnReconnect);
+    const retryOnReconnect = () => undefined;
     if (!migratedRef.current) {
       /* لم يكتمل الربط بعد: يُعاد قبل أي رفع حتى لا تُستبدل بيانات الخادم ببيانات جهاز قديمة */
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
@@ -2930,23 +2860,31 @@ export function AppProvider({
       skipPushRef.current = false;
       return;
     }
-    if (pushTimer.current) window.clearTimeout(pushTimer.current);
-    setSyncState("connecting");
-    pushTimer.current = window.setTimeout(async () => {
-      const meta = await pushOperating(pumpId, stateRef.current, { version: versionRef.current });
-      if (meta) {
-        versionRef.current = meta.version;
-        setSyncState("synced");
-      } else {
-        setSyncState("offline");
-      }
-    }, 2500);
+    setSyncState(state.syncQueue.some((s) => s.status === "pending") ? "dirty" : "local");
     return () => {
       if (pushTimer.current) window.clearTimeout(pushTimer.current);
       window.removeEventListener("online", retryOnReconnect);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, reconcile]);
+
+  const publishNow = useCallback(async (): Promise<boolean> => {
+    const pumpId = serverPumpIdRef.current;
+    if (!pumpId || !navigator.onLine) {
+      setSyncState("offline");
+      return false;
+    }
+    setSyncState("publishing");
+    const meta = await pushOperating(pumpId, stateRef.current, { version: versionRef.current });
+    if (!meta) {
+      setSyncState("offline");
+      return false;
+    }
+    versionRef.current = meta.version;
+    dispatch({ type: "MARK_SYNCED" });
+    setSyncState("synced");
+    return true;
+  }, []);
 
   /**
    * مزامنة التعارضات (§18): تُكتشف التعارضات وتُحفظ كسجلات مستقلة،
@@ -3043,6 +2981,7 @@ export function AppProvider({
       setTheme: (theme) => dispatch({ type: "SET_THEME", theme }),
       setAppearance: (patch) => dispatch({ type: "SET_APPEARANCE", patch }),
       markSynced: () => dispatch({ type: "MARK_SYNCED" }),
+      publishNow,
       clearServerData: async () => {
         const pumpId = serverPumpIdRef.current;
         if (!pumpId) return false;

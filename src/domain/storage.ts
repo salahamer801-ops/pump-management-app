@@ -37,11 +37,11 @@ function parseManagerState(raw: string | null): AppState | null {
 export function readManagerState(pumpId?: string | null): AppState | null {
   try {
     if (pumpId) {
-      /* البيانات الرسمية من الخادم أولًا (إن وُجدت)، ثم نسخة الجهاز المحلية */
-      const official = parseManagerState(localStorage.getItem(officialStorageKey(pumpId)));
-      if (official) return official;
+      /* Local First: بيانات الجهاز المحلية لا تُستبدل بذاكرة خادم قديمة عند الفتح. */
       const exact = parseManagerState(localStorage.getItem(managerStorageKey(pumpId)));
       if (exact) return exact;
+      const official = parseManagerState(localStorage.getItem(officialStorageKey(pumpId)));
+      if (official) return official;
     }
     const plain = parseManagerState(localStorage.getItem(MANAGER_STORAGE_KEY));
     if (plain) return plain;

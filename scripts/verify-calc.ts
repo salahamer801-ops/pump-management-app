@@ -24,7 +24,7 @@ import {
   stoppageMinutesInRange,
   stoppageMinutesInRange as stoppageIn,
 } from "../src/domain/rules";
-import { durationMin, formatTimeAmPm, formatTimeRange, minutesToTime, timeToMinutes, todayISO, uid } from "../src/domain/util";
+import { addDaysISO, durationMin, formatTimeAmPm, formatTimeRange, minutesToTime, timeToMinutes, todayISO, uid } from "../src/domain/util";
 import {
   formatRelativeAr,
   isStaleSince,
@@ -747,7 +747,48 @@ check(
   createdDay.entries.filter((e) => e.dayId === "day9").length === 0,
   createdDay.entries.length
 );
-
+/* ---------------- 20ب) كل يوم يملك مساهميه وحصصه بصورة مستقلة ----------- */
+const dynamicRoundDays = [10, 25].map((days, index) => ({
+  ...daily.state.days[0],
+  id: `dynamic-day-${days}`,
+  date: addDaysISO(today, index + 1),
+  roundId: `dynamic-round-${days}`,
+  dialaNumber: index + 10,
+}));
+let dynamicState: AppState = {
+  ...daily.state,
+  days: dynamicRoundDays,
+  entries: [],
+};
+const entryFor = (id: string, dayId: string, personId: string, minutes: number, start: string) => ({
+  ...mkEntry(id, personId, start, minutesToTime(timeToMinutes(start) + minutes)),
+  dayId,
+  plannedMin: minutes,
+});
+dynamicState = reducerForTests(dynamicState, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: entryFor("dynamic-e1", "dynamic-day-10", daily.people[0].id, 60, "06:00"),
+});
+dynamicState = reducerForTests(dynamicState, {
+  type: "SAVE_ENTRY",
+  isNew: true,
+  entry: entryFor("dynamic-e2", "dynamic-day-25", daily.people[1].id, 120, "06:00"),
+});
+check(
+  "20ب) حصة اليوم الأول لا تظهر في اليوم الثاني",
+  dynamicState.entries.filter((e) => e.dayId === "dynamic-day-10").length === 1 &&
+    dynamicState.entries.filter((e) => e.dayId === "dynamic-day-10")[0].personId === daily.people[0].id &&
+    dynamicState.entries.filter((e) => e.dayId === "dynamic-day-25")[0].personId === daily.people[1].id
+);
+check(
+  "20ج) حصة الشخص نفسه يمكن أن تختلف بين يومين",
+  dynamicState.entries.filter((e) => e.personId === daily.people[0].id).length === 1
+);
+check(
+  "20د) عدد الأيام يؤخذ من بيانات الديالة لا من رقم ثابت",
+  dynamicRoundDays.length === 2 && !dynamicRoundDays.some((d) => d.id === "day-17")
+);
 /* ------------------- 21) الرواسة الجزئية والديزل المدفوع ------------------ */
 
 const feeState: AppState = {

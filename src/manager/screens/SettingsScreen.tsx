@@ -6,7 +6,6 @@ import {
   Droplets,
   Info,
   KeyRound,
-  RefreshCcw,
   Save,
   Pencil,
   Linkedin,
@@ -41,6 +40,7 @@ export default function SettingsScreen({
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
   const [draft, setDraft] = useState(pump);
   /** إعدادات المضخة تُفتح في نافذة منبثقة بدلًا من بطاقة في الصفحة */
@@ -109,7 +109,7 @@ export default function SettingsScreen({
               "inline-flex items-center gap-1.5 text-[11px] font-extrabold",
               syncState === "synced"
                 ? "text-emerald-700 dark:text-emerald-400"
-                : syncState === "connecting"
+                : syncState === "connecting" || syncState === "publishing"
                   ? "text-gray-500 dark:text-slate-300"
                   : "text-amber-600 dark:text-amber-400"
             )}
@@ -126,11 +126,13 @@ export default function SettingsScreen({
             />
             {syncState === "synced"
               ? "محفوظ على الخادم"
-              : syncState === "connecting"
-                ? "جارٍ الحفظ…"
-                : syncState === "offline"
-                  ? "لا يوجد اتصال بالإنترنت"
-                  : "على هذا الجهاز فقط"}
+                  : syncState === "connecting" || syncState === "publishing"
+                    ? "جارٍ الحفظ…"
+                    : syncState === "offline"
+                      ? "لا يوجد اتصال بالإنترنت"
+                      : syncState === "dirty"
+                        ? "هناك تغييرات غير منشورة"
+                        : "محفوظ محليًا"}
           </span>
 
           {onSwitchPump ? (
@@ -205,7 +207,7 @@ export default function SettingsScreen({
           <Wifi size={16} className="text-sky-600 dark:text-sky-300" />
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">العمل بدون إنترنت والمزامنة</h2>
           <Pill tone={pending > 0 ? "amber" : "green"}>
-            <CloudOff size={11} /> {pending} تغيير بانتظار المزامنة
+            <CloudOff size={11} /> {pending} تغيير غير منشور
           </Pill>
         </div>
         <div className="rounded-2xl bg-gray-50 px-3 py-3 text-[11px] dark:bg-slate-700">
@@ -221,11 +223,21 @@ export default function SettingsScreen({
           </div>
         </div>
         <p className="rounded-2xl bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-          كل تعديل يُحفظ على الجهاز فورًا ويُرفع إلى الخادم خلال ثوانٍ، وتبقى بيانات مضخاتك جاهزة على أي جهاز تدخل
-          منه بحسابك. وإن انقطع الإنترنت يعمل التطبيق كما هو وتُرفع التعديلات عند عودة الاتصال.
+          كل تعديل يُحفظ على الجهاز فورًا ويظل متاحًا بلا إنترنت. لا يتم استبدال بياناتك المحلية ولا رفعها تلقائيًا.
+          راجعها ثم اضغط «نشر البيانات إلى الخادم» عندما تختار ذلك صراحة.
         </p>
-        <Button variant="outline" className="w-full" onClick={() => actions.markSynced()}>
-          <RefreshCcw size={16} /> تعليم كل التغييرات كمُزامنة
+        <Button
+          className="w-full"
+          disabled={publishing || pending === 0}
+          onClick={async () => {
+            setPublishing(true);
+            const ok = await actions.publishNow();
+            setPublishing(false);
+            setMessage(ok ? "تم نشر البيانات المحلية إلى الخادم بنجاح." : "فشل النشر، لكن بياناتك المحلية محفوظة ولم تُفقد.");
+          }}
+          data-testid="publish-local-data"
+        >
+          <Upload size={16} /> {publishing ? "جارٍ النشر…" : "نشر البيانات إلى الخادم"}
         </Button>
       </Card>
 

@@ -43,7 +43,6 @@ import {
 import { formatNumber } from "../../format";
 import { Button, Card, EmptyState, Field, Modal, Pill, TextInput, cx } from "../../components/ui";
 import { AddDialaButton } from "../components/AddDialaModal";
-import BaseRosterPanel from "../components/BaseRosterPanel";
 import { DayStatusPill } from "../../components/StatusPills";
 
 export default function DialaScreen({ onOpenDay }: { onOpenDay: (id: string | null) => void }) {
@@ -330,8 +329,6 @@ function RoundCard({
           </div>
         </div>
       </div>
-
-      <BaseRosterPanel round={round} actor="manager" />
 
       <div className="mt-2 grid grid-cols-4 gap-1 sm:grid-cols-7">
         {Array.from({ length: round.days }, (_, i) => {
