@@ -3,6 +3,7 @@ import {
   BarChart3,
   CalendarDays,
   CloudOff,
+  Download,
   FileSpreadsheet,
   History,
   Printer,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../../store";
 import type {
+  AppState,
   Conflict,
   ConflictStatus,
   Person,
@@ -45,6 +47,7 @@ import {
   uid,
 } from "../../domain/util";
 import { formatMoney, formatNumber } from "../../format";
+import * as XLSX from "xlsx";
 import {
   Button,
   Card,
@@ -115,7 +118,14 @@ export default function ReportsScreen() {
               onClick={() => window.print()}
               className="rounded-xl bg-gray-100 px-3 py-2 text-[11px] font-bold text-gray-600 dark:bg-slate-700 dark:text-slate-200"
             >
-              <Printer size={13} className="inline -mt-0.5" /> طباعة
+              <Printer size={13} className="inline -mt-0.5" /> تصدير PDF
+            </button>
+            <button
+              onClick={() => exportMonthlyExcel(state, month)}
+              className="rounded-xl bg-emerald-100 px-3 py-2 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+              data-testid="export-monthly-excel"
+            >
+              <Download size={13} className="inline -mt-0.5" /> Excel
             </button>
           </Card>
           <MonthlyReport month={month} />
@@ -126,6 +136,43 @@ export default function ReportsScreen() {
       {tab === "audit" ? <AuditTab /> : null}
     </div>
   );
+}
+
+function exportMonthlyExcel(state: AppState, month: string) {
+  const pump = state.pump;
+  if (!pump) return;
+  const days = sortedDays(state).filter((d) => monthKey(d.date) === month);
+  const usages = state.usages.filter((u) => u.status === "active" && monthKey(u.date) === month);
+  const txs = state.transactions.filter((t) => monthKey(t.date) === month);
+  const financials = pumpFinancials(state, `${month}-01`, `${month}-31`);
+  const dayName = (id: string | null) => {
+    const day = state.days.find((d) => d.id === id);
+    return day ? `${dialaDayLabel(state, day)} — ${day.date}` : "—";
+  };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["تقرير مضخة المياه", pump.name], ["الفترة", monthLabel(month)],
+    [], ["المؤشر", "القيمة"], ["عدد الأيام", days.length], ["عمليات التشغيل الفعلي", usages.length],
+    ["ساعات التشغيل", formatDuration(usages.reduce((s, u) => s + u.minutes, 0))],
+    ["الديزل المستهلك (لتر)", financials.fuelLiters], ["استحقاق الديزل", financials.fuelCharged],
+    ["استحقاق الرواسة", financials.royaltyCharged], ["المسدَّد", financials.collected], ["المتبقي", financials.outstanding],
+  ]), "الملخص");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usages.map((u) => ({
+    "التاريخ": u.date, "اليوم": dayName(u.dayId), "الشخص": personName(state, u.personId), "نوع الاستخدام": u.usageType,
+    "من": u.startTime, "إلى": u.endTime, "الدقائق": u.minutes, "المدة": formatDuration(u.minutes),
+    "الديزل لتر": u.fuelLiters, "استحقاق الديزل": u.fuelAmountDue, "تسديد الديزل": u.dieselSettlement,
+    "استحقاق الرواسة": u.royaltyAmountDue, "طريقة الرواسة": u.royaltyPayMode, "ملاحظات": u.notes,
+  }))), "الدوام الفعلي");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txs.map((t) => ({
+    "التاريخ": t.date, "اليوم": dayName(t.dayId), "الشخص": t.personId ? personName(state, t.personId) : "—",
+    "النوع": t.kind, "الاتجاه": t.direction === "debit" ? "استحقاق" : "سداد", "المبلغ": t.amount,
+    "العملة": pump.currency, "الحالة": t.status, "السبب": t.reason, "ملاحظات": t.notes,
+  }))), "الحسابات المالية");
+  const stoppages = state.stoppages.filter((s) => !s.archived && monthKey(s.date) === month);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stoppages.map((s) => ({
+    "التاريخ": s.date, "البداية": s.startTime, "النهاية": s.endTime, "المدة": formatDuration(s.minutes), "السبب": s.reason, "ملاحظات": s.notes,
+  }))), "التوقفات");
+  XLSX.writeFile(wb, `تقرير-${pump.name}-${month}.xlsx`);
 }
 
 function MonthlyReport({ month }: { month: string }) {
