@@ -358,7 +358,7 @@ export interface BaseRosterRow {
 export function baseRosterRows(state: AppState, roundId: string | null): BaseRosterRow[] {
   if (!roundId) return [];
   const rows = (state.roster ?? [])
-    .filter((r) => r.roundId === roundId && !r.archived)
+    .filter((r) => r.roundId === roundId && !r.dayId && !r.archived)
     .slice()
     .sort((a, b) => a.order - b.order || (a.createdAt < b.createdAt ? -1 : 1));
   return rows.map((member) => {
@@ -377,6 +377,34 @@ export function baseRosterRows(state: AppState, roundId: string | null): BaseRos
       endTime: "",
     };
   });
+}
+
+/** مساهمو اليوم الأساسيون: قائمة توقعية مستقلة عن الدوام الفعلي. */
+export function dayBaseRosterRows(state: AppState, dayId: string): BaseRosterRow[] {
+  const rows = (state.roster ?? [])
+    .filter((r) => r.dayId === dayId && !r.archived)
+    .slice()
+    .sort((a, b) => a.order - b.order || (a.createdAt < b.createdAt ? -1 : 1));
+  return rows.map((member) => {
+    const person = findPerson(state, member.personId);
+    return {
+      member,
+      personId: member.personId,
+      person,
+      name: person?.name ?? "—",
+      phone: person?.phone ?? "",
+      shareMin: member.shareMin ?? 0,
+      order: member.order ?? 0,
+      role: member.role ?? "shareholder",
+      isShareholder: !!person && isShareholder(state, member.pumpId, member.personId),
+      startTime: "",
+      endTime: "",
+    };
+  });
+}
+
+export function dayBaseRosterTotalMin(state: AppState, dayId: string): number {
+  return dayBaseRosterRows(state, dayId).reduce((sum, row) => sum + row.shareMin, 0);
 }
 
 /** ساعات تشغيل الدوام الأساسي للمضخة (نافذة التشغيل) */

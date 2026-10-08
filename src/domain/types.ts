@@ -269,6 +269,8 @@ export interface BaseRosterMember extends SoftDeletable {
   createdBy: string;
   /** أثر ترحيل فقط: القائمة اليومية القديمة التي جاء منها هذا السطر */
   legacyDayId?: ID;
+  /** إذا وُجد، فهذا مساهم أساسي لذلك اليوم فقط وليس كشفًا مشتركًا للديالة */
+  dayId?: ID;
 }
 
 /** ترتيب اليوم الفعلي — لا يغيّر الجدول الأساسي */

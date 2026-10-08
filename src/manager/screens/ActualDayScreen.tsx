@@ -112,6 +112,7 @@ import {
 } from "../../components/ui";
 import PersonPicker, { roleLabel } from "../../components/PersonPicker";
 import ParticipantModal from "../components/ParticipantModal";
+import DailyBaseRosterPanel from "../components/DailyBaseRosterPanel";
 import SettlementEditor, {
   settlementAmounts,
   settlementFromUsage,
@@ -501,14 +502,16 @@ export default function ActualDayScreen({
         </Card>
       ) : null}
 
-      {/* قائمة المساهمين الأساسية لهذا اليوم فقط — مستقلة عن بقية أيام الديالة */}
+      <DailyBaseRosterPanel day={day} />
+
+      {/* الدوام الفعلي: من أخذ التشغيل فعلًا، مع التأجير والسلفة والتحويل والتكاليف */}
       <Card className="p-4" data-testid="day-shift-section">
         <div className="mb-3 flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300">
             <Users size={16} />
           </span>
           <h2 className="text-sm font-extrabold text-gray-800 dark:text-white">
-            مساهمو اليوم الأساسيون — قائمة مستقلة قابلة للتعديل
+            الدوام الفعلي — من أخذ نصيبه من تشغيل المضخة في هذا اليوم
           </h2>
           <span className="mr-auto text-[11px] text-gray-400">{entries.length} مشارك</span>
         </div>
@@ -519,7 +522,7 @@ export default function ActualDayScreen({
 
         {entries.length === 0 ? (
           <p className="py-4 text-center text-xs text-gray-400">
-            لا يوجد مساهمون أساسيون في هذا اليوم بعد — أضف أول مساهم من زر «إضافة مساهم لهذا اليوم».
+            لا يوجد شخص أخذ تشغيلًا فعليًا في هذا اليوم بعد — أضف صف الدوام الفعلي من الزر أدناه.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -579,12 +582,11 @@ export default function ActualDayScreen({
 
         <div className="mt-3">
           <Button className="w-full" onClick={() => setPickerOpen(true)} data-testid="day-add-participant">
-            <Plus size={18} /> إضافة مساهم لهذا اليوم
+            <Plus size={18} /> إضافة صف للدوام الفعلي
           </Button>
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-          هذه القائمة تخص هذا اليوم فقط: قد تضم 16 مساهمًا في يوم، و16 مساهمًا مختلفين في اليوم التالي، و8 في يوم آخر.
-          أضف أو عدّل أو أزل المساهمين هنا؛ لا تنتقل التغييرات إلى أي يوم آخر.
+          هذه القائمة للحساب الفعلي فقط: قد يكون الشخص مساهمًا، أو مشتريًا لنصيب مساهم، أو مستلفًا نصيبه، أو مستخدمًا لنصيب محوّل إليه. تُحفظ معها أوقات التشغيل وتكاليف الديزل والرواسة والسداد والنقص.
         </p>
       </Card>
 

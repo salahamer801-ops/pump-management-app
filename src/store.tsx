@@ -57,6 +57,7 @@ import {
   scheduleConflicts,
   personName,
   baseRosterRows,
+  dayBaseRosterRows,
   baseRosterCapacityMin,
   baseRosterFits,
   roundOfDay,
@@ -114,6 +115,8 @@ export type Action =
   | { type: "UNLOCK_ROUND"; id: string; reason: string; actor: string }
   | { type: "ARCHIVE_ROUND"; id: string; archived: boolean; reason?: string; actor?: string; force?: boolean }
   | { type: "SAVE_ENTRY"; entry: DayEntry; isNew: boolean; correctionReason?: string; actor?: string }
+  | { type: "SAVE_DAY_BASE_ROSTER_MEMBER"; dayId: string; personId: string; shareMin: number; actor?: string }
+  | { type: "REMOVE_DAY_BASE_ROSTER_MEMBER"; id: string; reason?: string; actor?: string }
   | {
       type: "SAVE_BASE_ROSTER_MEMBER";
       roundId: string;
@@ -1083,7 +1086,71 @@ function reducer(state: AppState, action: Action): AppState {
       });
     }
 
-    /* -------- كشف الدوام الأساسي: كشف واحد لكل ديالة، حدّه ساعات التشغيل -------- */
+    /* -------- مساهمو اليوم الأساسيون: توقعات مستقلة عن الدوام الفعلي -------- */
+
+    case "SAVE_DAY_BASE_ROSTER_MEMBER": {
+      const day = state.days.find((d) => d.id === action.dayId);
+      if (!day) return state;
+      const rows = dayBaseRosterRows(state, day.id);
+      const existing = rows.find((r) => r.personId === action.personId);
+      const shareMin = Math.max(0, Math.round(action.shareMin));
+      const used = rows.filter((r) => r.member.id !== existing?.member.id).reduce((sum, r) => sum + r.shareMin, 0);
+      if (used + shareMin > day.capacityMin) return state;
+      const at = new Date().toISOString();
+      const actor = action.actor ?? "manager";
+      const member: BaseRosterMember = existing
+        ? { ...existing.member, shareMin }
+        : {
+            id: uid("dayrst"),
+            pumpId: day.pumpId,
+            roundId: day.roundId ?? "day-only",
+            dayId: day.id,
+            personId: action.personId,
+            shareMin,
+            order: rows.length,
+            role: "shareholder",
+            notes: "مساهم أساسي لهذا اليوم فقط",
+            archived: false,
+            createdAt: at,
+            createdBy: actor,
+          };
+      const next = {
+        ...state,
+        roster: existing
+          ? state.roster.map((r) => (r.id === member.id ? member : r))
+          : [...state.roster, member],
+      };
+      return commit(state, next, {
+        action: existing ? "update" : "create",
+        entity: "day_roster",
+        entityId: member.id,
+        summary: `${existing ? "تعديل" : "إضافة"} مساهم أساسي في اليوم ${day.date}: ${personName(state, action.personId)} (${shareMin} دقيقة)`,
+        before: existing?.member ?? "",
+        after: member,
+        op: existing ? "update" : "create",
+        actor,
+      });
+    }
+
+    case "REMOVE_DAY_BASE_ROSTER_MEMBER": {
+      const member = state.roster.find((r) => r.id === action.id && r.dayId);
+      if (!member) return state;
+      const at = new Date().toISOString();
+      const next = { ...state, roster: state.roster.map((r) => (r.id === member.id ? { ...r, archived: true } : r)) };
+      return commit(state, next, {
+        action: "archive",
+        entity: "day_roster",
+        entityId: member.id,
+        summary: `إزالة مساهم اليوم الأساسي: ${personName(state, member.personId)}`,
+        before: member,
+        after: { ...member, archived: true, deletedAt: at, deletedBy: action.actor ?? "manager", deletionReason: action.reason ?? "" },
+        op: "delete",
+        actor: action.actor ?? "manager",
+        reason: action.reason,
+      });
+    }
+
+    /* -------- كشف الدوام الأساسي القديم: كشف واحد لكل ديالة -------- */
 
     case "SAVE_BASE_ROSTER_MEMBER": {
       const round = state.rounds.find((r) => r.id === action.roundId);
@@ -2524,6 +2591,8 @@ export interface AppActions {
     isNew: boolean,
     opts?: { correctionReason?: string; actor?: string }
   ) => void;
+  saveDayBaseRosterMember: (dayId: string, personId: string, shareMin: number, actor?: string) => void;
+  removeDayBaseRosterMember: (id: string, opts?: { reason?: string; actor?: string }) => void;
   /** كشف الدوام الأساسي: إضافة/تعديل نصيب شخص في كشف الديالة */
   saveBaseRosterMember: (
     roundId: string,
@@ -2930,6 +2999,10 @@ export function AppProvider({
       archiveRound: (id, archived, opts) => dispatch({ type: "ARCHIVE_ROUND", id, archived, ...opts }),
       saveEntry: (entry, isNew, opts) =>
         dispatch({ type: "SAVE_ENTRY", entry, isNew, ...opts }),
+      saveDayBaseRosterMember: (dayId, personId, shareMin, actor) =>
+        dispatch({ type: "SAVE_DAY_BASE_ROSTER_MEMBER", dayId, personId, shareMin, actor }),
+      removeDayBaseRosterMember: (id, opts) =>
+        dispatch({ type: "REMOVE_DAY_BASE_ROSTER_MEMBER", id, ...opts }),
       saveBaseRosterMember: (roundId, personId, shareMin, opts) =>
         dispatch({ type: "SAVE_BASE_ROSTER_MEMBER", roundId, personId, shareMin, ...opts }),
       bulkAddBaseRoster: (roundId, items, actor) =>
