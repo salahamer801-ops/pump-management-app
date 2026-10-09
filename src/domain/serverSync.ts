@@ -145,6 +145,7 @@ export function payloadFromState(state: AppState): OperatingPayload {
     roster: state.roster.map((r) => ({
       id: r.id,
       dialaId: r.roundId,
+      dayId: r.dayId ?? "",
       personId: r.personId,
       personName: nameOf.get(r.personId) ?? "",
       role: r.role,
@@ -429,6 +430,7 @@ export function applyPayload(state: AppState, payload: OperatingResponse | Opera
       asRows<Row>(payload.roster).map((r) => ({
         ...(r as unknown as AppState["roster"][number]),
         roundId: str(r.dialaId ?? (r as { roundId?: string }).roundId),
+        dayId: str(r.dayId ?? (r as { dayId?: string }).dayId) || undefined,
       })),
       state.roster
     ),

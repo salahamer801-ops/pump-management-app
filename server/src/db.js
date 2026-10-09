@@ -316,6 +316,8 @@ CREATE TABLE IF NOT EXISTS diala_roster (
   id text PRIMARY KEY,
   pump_id uuid NOT NULL REFERENCES pumps(id) ON DELETE CASCADE,
   diala_id text NOT NULL REFERENCES dialas(id) ON DELETE CASCADE,
+  /* day_id يُتحقق من ملكيته في مسارات الخادم؛ جدول الأيام يُنشأ لاحقًا */
+  day_id text,
   person_id text,
   person_name text NOT NULL DEFAULT '',
   role text NOT NULL DEFAULT 'shareholder',
@@ -330,7 +332,9 @@ CREATE TABLE IF NOT EXISTS diala_roster (
   deleted_by uuid,
   deletion_reason text NOT NULL DEFAULT ''
 );
+ALTER TABLE diala_roster ADD COLUMN IF NOT EXISTS day_id text;
 CREATE INDEX IF NOT EXISTS diala_roster_diala_idx ON diala_roster(diala_id);
+CREATE INDEX IF NOT EXISTS diala_roster_day_idx ON diala_roster(day_id);
 
 /* أيام الديالة */
 CREATE TABLE IF NOT EXISTS diala_days (

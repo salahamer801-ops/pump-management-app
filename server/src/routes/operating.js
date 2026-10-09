@@ -156,6 +156,7 @@ const SPECS = {
     table: "diala_roster",
     cols: {
       dialaId: asText,
+      dayId: asText,
       personId: asText,
       personName: asText,
       role: asText,
@@ -725,6 +726,22 @@ async function applySync(req, res, { source = "api", migration = false } = {}) {
       data.roster = data.roster.filter(
         (r) => r && validEntityId(r.id) && (r.dialaId ? ownIds.has(String(r.dialaId)) : false)
       );
+      for (const row of data.roster) {
+        const dayId = asText(row.dayId);
+        if (!dayId) continue;
+        const day = await tx(
+          `SELECT id, diala_id FROM diala_days WHERE id = $1 AND pump_id = $2 AND deleted_at IS NULL`,
+          [dayId, pump.id]
+        );
+        const incomingDay = (data.days ?? []).find((d) => String(d?.id ?? "") === dayId);
+        const belongsToIncoming = incomingDay && String(incomingDay.dialaId ?? "") === String(row.dialaId);
+        if (
+          (day.rowCount === 0 && !belongsToIncoming) ||
+          (day.rowCount > 0 && String(day.rows[0].diala_id ?? row.dialaId) !== String(row.dialaId))
+        ) {
+          throw badRequest("مساهم اليوم مرتبط بيوم أو ديالة لا تنتمي لهذه المضخة.", "unknown_roster_day");
+        }
+      }
       assertRosterCapacity(data.roster, capacityMin);
       const locked = await lockedDialaIds(pump.id);
       if (locked.length) {
